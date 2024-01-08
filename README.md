@@ -27,5 +27,5 @@ mandoline [args] plotfile
 This means that the number of point in a given slice is dependent on the `amr.blocking_factor` parameter.
 On a given level the number of points in the slice will equal or lower than the number of cells divided by `amr.blocking_factor`.
 This means that for a problem with 256 cells at level 0 and the default `amr.blocking_factor` of 8 a slice at level 0 would have 32x32 points. 
-With `amr.ref_ratio = 2`, slice resolutions at levels 1, 2, 3 and 4 would be 64x64, 128x128, 256x256 and 512x512.
+With `amr.ref_ratio = 2`, slice resolutions at levels 1, 2, 3 and 4 would be 64x64, 128x128, 256x256 and 512x512, a not so bad resolution for a 4" image. 
 
