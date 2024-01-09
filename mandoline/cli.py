@@ -37,9 +37,9 @@ def main():
             help="Maximum AMR level loaded, defaults to finest level")
     parser.add_argument(
             "--format", "-f", type=str,
-            help=("Either image or array"
-                  "image: creates and saves an image using matplotlib"
-                  "array: creates a numpy array with a 500x500 uniform grid"
+            help=("Either image or array "
+                  "image: creates and saves an image using matplotlib "
+                  "array: creates a numpy array with a 500x500 uniform grid "
                   "and saves it as a pickle file of a python dict"))
     parser.add_argument(
             "--output", "-o", type=str,
