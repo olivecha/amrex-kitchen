@@ -6,7 +6,7 @@ A command line tool to create fast slices of (large) AMReX plotfiles.
 
 ```
 mandoline [args] plotfile
-          -n --normal_dir [Normal coordinate to the slice x:0, y:1, z:2]
+          -n --normal     [Normal coordinate to the slice x:0, y:1, z:2]
           -c --coordinate [Coordinate of the slice, defaults to mid plane]
           -v --variable   [variable name, defaults to "density"]
           -L --max_level  [Maximum AMR level used, defaults to finest level]
@@ -16,7 +16,7 @@ mandoline [args] plotfile
                                   at the max_level resolution]
           -f --file       [File name used to override the default value]
           -- Image only options --
-          -c --colormap   [A named matplotlib colormap, defaults to viridis]
+          -c --colormap   [A named matplotlib colormap, defaults to jet]
           -m --minimum    [Minimum value used in the colormap]
           -M --maximum    [Maximum value used in the colormap]
           -l --log        [Flag to use log scale in the plot]
