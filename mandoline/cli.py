@@ -2,7 +2,9 @@ import os
 import sys
 import time
 import argparse
+import pickle
 import numpy as np
+from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
 import matplotlib
 from mandoline import HeaderData
@@ -75,49 +77,79 @@ def main():
     # Find out what x and y are in the plot
     x_coord, y_coord = [i for i in range(3) if i != args.normal]
     
-    fig = plt.figure(figsize=(8, 6))
+    # Array output
+    if args.output == "array":
+        # Interpolation bounds
+        x_lo, x_hi = np.min(points[x_coord]), np.max(points[x_coord])
+        y_lo, y_hi = np.min(points[y_coord]), np.max(points[y_coord])
 
-    # Special case for grid_level 
-    # (use the same number of colors as the number of levels)
-    if args.variable == 'grid_level':
-        if args.max_level is None:
-            n_levels = max(1, hdr.max_level - 1)
+        # Reshape points as tuples
+        in_points = np.vstack([points[x_coord], points[y_coord]]).T
+
+        # Output points
+        x_out = np.linspace(x_lo, x_hi, 500)
+        y_out = np.linspace(y_lo, y_hi, 500)
+        out_points = np.meshgrid(x_out, y_out)
+
+        # Interpolate on output points
+        out_data = griddata(in_points, temp, 
+                            np.transpose([arr.flatten() for arr in out_points]),
+                            fill_value=0.)
+
+        # Make a dict with output
+        output = {'x':x_out,
+                  'y':y_out,
+                  'var':out_data.reshape(500, 500)}
+
+        # Pickle into the jar
+        pfile = open(f"{args.plotfile}_{coords_dict[args.normal]}_{args.variable}", 'wb')
+        pickle.dump(output, pfile)
+
+    # Image output
+    else:
+        fig = plt.figure(figsize=(8, 6))
+
+        # Special case for grid_level 
+        # (use the same number of colors as the number of levels)
+        if args.variable == 'grid_level':
+            if args.max_level is None:
+                n_levels = max(1, hdr.max_level - 1)
+            else:
+                n_levels = max(1, args.max_level - 1)
         else:
-            n_levels = max(1, args.max_level - 1)
-    else:
-        n_levels = 100  # Looks good
+            n_levels = 100  # Looks good
 
-    # Use log scale ?
-    if args.log:
-        norm = 'log'
-    else:
-        norm = 'linear'
+        # Use log scale ?
+        if args.log:
+            norm = 'log'
+        else:
+            norm = 'linear'
 
-    if args.colormap in plt.colormaps.keys():
-        cmap = args.colormap
-    else:
-        cmap = 'jet'
-    
-    # Plot the slice
-    plt.tricontourf(points[x_coord],
-                    points[y_coord],
-                    data,
-                    n_levels,
-                    vmin=args.minimum,
-                    vmax=args.maximum,
-                    norm=norm,
-                    cmap=cmap)
+        if args.colormap in plt.colormaps.keys():
+            cmap = args.colormap
+        else:
+            cmap = 'jet'
+        
+        # Plot the slice
+        plt.tricontourf(points[x_coord],
+                        points[y_coord],
+                        data,
+                        n_levels,
+                        vmin=args.minimum,
+                        vmax=args.maximum,
+                        norm=norm,
+                        cmap=cmap)
 
-    # Add a colorbar  
-    plt.colorbar(label=f'{args.variable}')
-    ax = plt.gca()
-    ax.set_aspect('equal')
-    ax.set_xlabel(f"{coords_dict[x_coord]} [m]")
-    ax.set_ylabel(f"{coords_dict[y_coord]} [m]")
-    
-    # save and close
-    fig.savefig(f"{args.plotfile}_{coords_dict[args.normal]}_{args.variable}", dpi=300)
-    plt.close(fig)
+        # Add a colorbar  
+        plt.colorbar(label=f'{args.variable}')
+        ax = plt.gca()
+        ax.set_aspect('equal')
+        ax.set_xlabel(f"{coords_dict[x_coord]} [m]")
+        ax.set_ylabel(f"{coords_dict[y_coord]} [m]")
+        
+        # save and close
+        fig.savefig(f"{args.plotfile}_{coords_dict[args.normal]}_{args.variable}", dpi=300)
+        plt.close(fig)
 
 if __name__ == "__main__":
     main()
