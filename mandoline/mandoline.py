@@ -104,7 +104,7 @@ class HeaderData(object):
         """
         find boxes indexes in a slice
         """
-        print("Combuting box indexes in slice...")
+        print("Computing box indexes in slice...")
         if max_level is None:
             max_level = self.max_level
         if value is None:

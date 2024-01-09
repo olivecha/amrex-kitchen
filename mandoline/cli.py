@@ -45,7 +45,7 @@ def main():
             "--output", "-o", type=str,
             help="File name used to override the default value")
     parser.add_argument(
-            "--colormap", "-cm", type=str,
+            "--colormap", "-c", type=str,
             help="A named matplotlib colormap, defaults to jet")
     parser.add_argument(
             "--minimum", "-m", type=float,
@@ -109,6 +109,7 @@ def main():
         # Pickle into the jar
         pfile = open(filename + ".pkl", 'wb')
         pickle.dump(output, pfile)
+        print("Saved uniform grid!")
 
     # Image output
     else:
