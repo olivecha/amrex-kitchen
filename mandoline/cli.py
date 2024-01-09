@@ -131,7 +131,7 @@ def main():
         else:
             norm = 'linear'
 
-        if args.colormap in plt.colormaps.keys():
+        if args.colormap in plt.colormaps():
             cmap = args.colormap
         else:
             cmap = 'jet'
