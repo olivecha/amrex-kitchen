@@ -102,7 +102,7 @@ def main():
                   'var':out_data.reshape(500, 500)}
 
         # Pickle into the jar
-        pfile = open(f"{args.plotfile}_{coords_dict[args.normal]}_{args.variable}", 'wb')
+        pfile = open(f"{args.plotfile}_{coords_dict[args.normal]}_{args.variable}.pkl", 'wb')
         pickle.dump(output, pfile)
 
     # Image output
