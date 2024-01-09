@@ -92,7 +92,7 @@ def main():
         out_points = np.meshgrid(x_out, y_out)
 
         # Interpolate on output points
-        out_data = griddata(in_points, temp, 
+        out_data = griddata(in_points, data, 
                             np.transpose([arr.flatten() for arr in out_points]),
                             fill_value=0.)
 
