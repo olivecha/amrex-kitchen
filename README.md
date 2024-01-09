@@ -22,6 +22,18 @@ mandoline [args] plotfile
           -l --log        [Flag to use log scale in the plot]
 ```
 
+## Instalation
+
+First install the requirements (most likely you already have them):
+```
+pip install -r requirements.txt
+```
+Then install the mandoline executable:
+```
+pip install -e .
+```
+The `-e` flag makes the source files editable so reinstalling after each `git pull` is not necessary.
+
 ## Caveats
 
 `mandoline` infers the mesh geometry from the grid box data in the plotfile header file. 
