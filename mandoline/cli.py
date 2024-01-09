@@ -25,10 +25,10 @@ def main():
             help="Path of the plotfile to slice")
     parser.add_argument(
             "--normal", "-n", type=int,
-            help="Normal coordinate to the slice x:0, y:1, z:2")
+            help="Coordinate normal to the slice x:0, y:1, z:2")
     parser.add_argument(
-            "--coordinate", "-c", type=float,
-            help="Coordinate of the slice, defaults to mid plane")
+            "--position", "-p", type=float,
+            help="position of the slice, defaults to mid plane")
     parser.add_argument(
             "--variable", "-v", type=str,
             help="variable name, defaults to \"density\"")
@@ -36,13 +36,13 @@ def main():
             "--max_level", "-L", type=int,
             help="Maximum AMR level loaded, defaults to finest level")
     parser.add_argument(
-            "--output", "-o", type=str,
+            "--format", "-f", type=str,
             help=("Either image or array"
-                  "plot: creates and saves an image using matplotlib"
-                  "array: creates and saves a numpy array with uniform grid"
-                  "at the max_level resolution"))
+                  "image: creates and saves an image using matplotlib"
+                  "array: creates a numpy array with a 500x500 uniform grid"
+                  "and saves it as a pickle file of a python dict"))
     parser.add_argument(
-            "--file", "-f", type=str,
+            "--output", "-o", type=str,
             help="File name used to override the default value")
     parser.add_argument(
             "--colormap", "-cm", type=str,
@@ -59,11 +59,16 @@ def main():
     
     args = parser.parse_args()
 
+    if args.output is None:
+        filename = f"{args.plotfile}_{coords_dict[args.normal]}_{args.variable}"
+    else:
+        filename = args.output
+
     # Read the header
     hdr = HeaderData(args.plotfile, max_level=args.max_level)
     
     # Compute the box indexes in the slice
-    slice_idx = hdr.slice_indexes(args.normal, args.coordinate, args.max_level)
+    slice_idx = hdr.slice_indexes(args.normal, args.position, args.max_level)
 
     points = hdr.points_from_indexes(slice_idx)
     
@@ -78,7 +83,7 @@ def main():
     x_coord, y_coord = [i for i in range(3) if i != args.normal]
     
     # Array output
-    if args.output == "array":
+    if args.format == "array":
         # Interpolation bounds
         x_lo, x_hi = np.min(points[x_coord]), np.max(points[x_coord])
         y_lo, y_hi = np.min(points[y_coord]), np.max(points[y_coord])
@@ -102,7 +107,7 @@ def main():
                   'var':out_data.reshape(500, 500)}
 
         # Pickle into the jar
-        pfile = open(f"{args.plotfile}_{coords_dict[args.normal]}_{args.variable}.pkl", 'wb')
+        pfile = open(filename + ".pkl", 'wb')
         pickle.dump(output, pfile)
 
     # Image output
@@ -148,7 +153,7 @@ def main():
         ax.set_ylabel(f"{coords_dict[y_coord]} [m]")
         
         # save and close
-        fig.savefig(f"{args.plotfile}_{coords_dict[args.normal]}_{args.variable}", dpi=300)
+        fig.savefig(filename, dpi=300)
         plt.close(fig)
 
 if __name__ == "__main__":
