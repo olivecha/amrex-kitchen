@@ -6,19 +6,20 @@ A command line tool to create fast slices of (large) AMReX plotfiles.
 
 ```
 mandoline [args] plotfile
-          -n --normal_dir {Normal coordinate to the slice x:0, y:1, z:2}
-          -c --coordinate {Coordinate of the slice, defaults to mid plane}
-          -v --variable {variable name, defaults to "density"}
-          -L --max_level {Maximum AMR level used, defaults to finest level}
-          -o --output {Either "image" or "array"
-                       plot: creates a image saved as {plotfile}_{dir}_{variable}.png
-                       array: creates a numpy array saved as {plotfile}_{dir}_{variable}.npy}
-          -f --file {File name used to override the default value}
+          -n --normal_dir [Normal coordinate to the slice x:0, y:1, z:2]
+          -c --coordinate [Coordinate of the slice, defaults to mid plane]
+          -v --variable   [variable name, defaults to "density"]
+          -L --max_level  [Maximum AMR level used, defaults to finest level]
+          -o --output     [Either "image" or "array"
+                           plot: creates and saves an image using matplotlib
+                           array: creates and saves a numpy array with uniform grid
+                                  at the max_level resolution]
+          -f --file       [File name used to override the default value]
           -- Image only options --
-          -c --colormap {A named matplotlib colormap, defaults to viridis}
-          -m --minimum {Minimum value used in the colormap}
-          -M --maximum {Maximum value used in the colormap}
-          -l --log {Flag to use log scale in the plot}
+          -c --colormap   [A named matplotlib colormap, defaults to viridis]
+          -m --minimum    [Minimum value used in the colormap]
+          -M --maximum    [Maximum value used in the colormap]
+          -l --log        [Flag to use log scale in the plot]
 ```
 
 ## Caveats
