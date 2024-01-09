@@ -43,7 +43,7 @@ class HeaderData(object):
             # Loop over the grid levels
             if max_level is None:
                 max_level = self.max_level
-            for lv in range(max_level):
+            for lv in range(max_level + 1):
                 # Read level and number of cells
                 current_level, n_cells, _ = [n for n in hfile.readline().split()]
                 current_level = int(current_level)
@@ -115,7 +115,7 @@ class HeaderData(object):
             value += 1e-6*coord_max # So we are not between boxes
 
         indexes = {}
-        for lv in range(max_level):
+        for lv in range(max_level + 1):
             lv_key = f"Lv_{lv}"
             indexes[lv_key] = []
             for i, box in enumerate(self.boxes[lv_key]):
@@ -125,7 +125,7 @@ class HeaderData(object):
         xi, yi = [i for i in range(3) if i != coord]
 
         # Remove indexes where higher resolution points exist
-        for lv in range(max_level-1):
+        for lv in range(max_level):
             lv_key = f"Lv_{lv}"
             nlv_key = f"Lv_{lv+1}"
             boxes = self.boxes[lv_key][indexes[lv_key]]
@@ -185,7 +185,7 @@ class HeaderData(object):
         """
         grid_data = []
         for i, ky in enumerate(indexes):
-            grid_data.append(np.repeat(i, len(indexes[ky])))
+            grid_data.append(np.repeat(float(i), len(indexes[ky])))
         return np.hstack(grid_data)
 
     def points_from_indexes(self, indexes, fix_corners=True):

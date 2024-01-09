@@ -119,17 +119,17 @@ def main():
         # (use the same number of colors as the number of levels)
         if args.variable == 'grid_level':
             if args.max_level is None:
-                n_levels = max(1, hdr.max_level)
+                n_levels = np.arange(0, hdr.max_level + 2)
             else:
-                n_levels = max(1, args.max_level)
+                n_levels = np.arange(0, args.max_level + 2)
         else:
             n_levels = 100  # Looks good
 
         # Use log scale ?
         if args.log:
-            norm = 'log'
+            norm = matplotlib.colors.LogNorm()
         else:
-            norm = 'linear'
+            norm = None
 
         if args.colormap in plt.colormaps():
             cmap = args.colormap
