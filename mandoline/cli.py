@@ -119,9 +119,9 @@ def main():
         # (use the same number of colors as the number of levels)
         if args.variable == 'grid_level':
             if args.max_level is None:
-                n_levels = max(1, hdr.max_level - 1)
+                n_levels = max(1, hdr.max_level)
             else:
-                n_levels = max(1, args.max_level - 1)
+                n_levels = max(1, args.max_level)
         else:
             n_levels = 100  # Looks good
 
