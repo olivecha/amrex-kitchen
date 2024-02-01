@@ -5,11 +5,21 @@ A command line tool to create fast slices of (large) AMReX plotfiles.
 
 ## Instalation
 
-First install the requirements (most likely you already have them):
+Clone the repository
+```
+git clone https://github.com/olivecha/mandoline.git
+```
+Go into it
+```
+cd mandoline
+```
+
+Install the requirements (most likely you already have them):
 ```
 pip install -r requirements.txt
 ```
-Then install the mandoline executable:
+
+Then install the mandoline command line executable:
 ```
 pip install -e .
 ```
