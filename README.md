@@ -3,7 +3,17 @@ A command line tool to create fast slices of (large) AMReX plotfiles.
 
 <img width="350" alt="image" src="https://github.com/olivecha/mandoline/assets/78630053/857636f4-e49d-41d2-b428-6e12b6874157">
 
+## Instalation
 
+First install the requirements (most likely you already have them):
+```
+pip install -r requirements.txt
+```
+Then install the mandoline executable:
+```
+pip install -e .
+```
+The `-e` flag makes the source files editable so reinstalling after each `git pull` is not necessary.
 
 ## Usage
 
@@ -47,19 +57,6 @@ optional arguments:
   --verbose VERBOSE, -V VERBOSE
                         Verbosity level, defaults to 1
 ```
-
-## Instalation
-
-First install the requirements (most likely you already have them):
-```
-pip install -r requirements.txt
-```
-Then install the mandoline executable:
-```
-pip install -e .
-```
-The `-e` flag makes the source files editable so reinstalling after each `git pull` is not necessary.
-
 ## How it works
 
 1. The block information is read from the plotfile header
