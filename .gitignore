@@ -2,3 +2,4 @@ build
 assets
 mandoline.egg-info
 mandoline/__pycache__
+.DS_Store
