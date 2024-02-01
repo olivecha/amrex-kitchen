@@ -1,9 +1,9 @@
 # mandoline
+A command line tool to create fast slices of (large) AMReX plotfiles.
 
 <img width="350" alt="image" src="https://github.com/olivecha/mandoline/assets/78630053/857636f4-e49d-41d2-b428-6e12b6874157">
 
 
-A command line tool to create fast slices of (large) AMReX plotfiles.
 
 ## Usage
 
