@@ -15,7 +15,7 @@ class TestSliceData(unittest.TestCase):
         c = SliceData(test_pfile, ['temp', 'mag_vort'], 0, 0., limit_level=Lv)
         self.assertListEqual(c.fidxs, [0, 1])
 
-        c = SliceData(test_pfile, 'grid_data', 0, 0., limit_level=Lv)
+        c = SliceData(test_pfile, 'grid_level', 0, 0., limit_level=Lv)
         self.assertListEqual(c.fidxs, [None])
 
         c = SliceData(test_pfile, 'all', 0, 0., limit_level=Lv)
