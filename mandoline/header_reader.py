@@ -40,11 +40,17 @@ class HeaderData(object):
             self.sys_coord = hfile.readline()
             # Sanity check
             assert 0 == int(hfile.readline())
-            # Read the boxes
-            self.box_centers, self.boxes = self.read_boxes(hfile, limit_level)
-            self.cells = self.read_cell_headers(limit_level)
+            # Define the max level we read
+            if limit_level is None:
+                self.limit_level = self.max_level
+            else:
+                self.limit_level=limit_level
+            # Read the box geometry
+            self.box_centers, self.boxes = self.read_boxes(hfile)
+        # Read the cell data
+        self.cells = self.read_cell_headers()
             
-    def read_boxes(self, hfile, limit_level):
+    def read_boxes(self, hfile):
         """
         Read the AMR boxes geometry in the base header file
         """
@@ -54,9 +60,7 @@ class HeaderData(object):
         self.npoints = {}
         self.cell_paths = []
         # Loop over the grid levels
-        if limit_level is None:
-            limit_level = self.max_level
-        for lv in range(limit_level + 1):
+        for lv in range(self.limit_level + 1):
             # Read level and number of cells
             current_level, n_cells, _ = [n for n in hfile.readline().split()]
             current_level = int(current_level)
@@ -88,14 +92,12 @@ class HeaderData(object):
             boxes[ky] = np.array(boxes[ky])
         return points, boxes
 
-    def read_cell_headers(self, limit_level):
+    def read_cell_headers(self):
         """
         Read the cell header data for a given level
         """
-        if limit_level is None:
-            limit_level = self.max_level
         cells = {}
-        for i in range(limit_level + 1):
+        for i in range(self.limit_level + 1):
             cells[f"Lv_{i}"] = {}
             cfile_path = os.path.join(self.pfile, self.cell_paths[i] + "_H")
             with open(cfile_path) as cfile:
@@ -131,4 +133,6 @@ class HeaderData(object):
         for i, f in enumerate(self.fields):
             if f == field:
                 return i
-        raise ValueError(f"Field {field} was not found in file")
+        raise ValueError(f"""Field {field} was not found in file. 
+                             Available fields in {self.pfile.split('/')[-1]} are:
+                             {', '.join(self.fields.keys())} and grid_level""")
