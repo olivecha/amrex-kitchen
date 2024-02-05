@@ -2,4 +2,5 @@ build
 assets
 mandoline.egg-info
 mandoline/__pycache__
+.ipynb_checkpoints
 .DS_Store
