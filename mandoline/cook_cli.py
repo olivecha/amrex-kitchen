@@ -24,7 +24,7 @@ def main():
                   " uses Cantera)"))
     parser.add_argument(
             "--limit_level", "-l", type=int,
-            help=("Maximum AMR Level read in plotfile")
+            help="Maximum AMR Level read in plotfile")
     parser.add_argument(
             "--output", "-o", type=str,
             help="Output path to store the post processing")
