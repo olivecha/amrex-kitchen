@@ -1,5 +1,6 @@
 import os
 import multiprocessing
+from p_tqdm import p_map
 import time
 import numpy as np
 import argparse
@@ -75,8 +76,8 @@ def main():
                        "ncells":len(level_files)}
             call_args.append(mp_args)
         # One process per file
-        with multiprocessing.Pool() as pool:
-            new_offsets_stack = pool.map(parallel_cook, call_args)
+        #with multiprocessing.Pool() as pool:
+        new_offsets_stack = p_map(parallel_cook, call_args)
         print(f"Done!", f"({np.around(time.time() - cook_start, 2)} s)")
         # Reduce arrays together
         new_offsets[Lv] = np.sum(new_offsets_stack, axis=0)
