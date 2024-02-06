@@ -25,6 +25,7 @@ setuptools.setup(
     entry_points={
         "console_scripts": [
             "mandoline = mandoline.cli:main",
+            "cuisine = mandoline.cli_cook:main",
         ]
     }
 )
