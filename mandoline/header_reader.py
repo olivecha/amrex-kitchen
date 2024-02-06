@@ -1,4 +1,5 @@
 import os
+import shutil
 import linecache
 import numpy as np
 from tqdm import tqdm
@@ -136,3 +137,18 @@ class HeaderData(object):
         raise ValueError(f"""Field {field} was not found in file. 
                              Available fields in {self.pfile.split('/')[-1]} are:
                              {', '.join(self.fields.keys())} and grid_level""")
+
+    
+    def make_dir_tree(self, outpath, limit_level=None):
+        """
+        Re-Create the tree structure of the plotfile in :outpath:
+        """
+        os.makedirs(outpath, exist_ok=True)
+        #shutil.copy(os.path.join(self.pfile, 'Header'),
+        #           outpath)
+        for pth in self.cell_paths:
+            level_dir = pth.split('/')[0]
+            os.makedirs(os.path.join(outpath, level_dir), exist_ok=True)
+            #shutil.copy(os.path.join(self.pfile, pth + '_H'),
+            #            os.path.join(outpath, level_dir))
+            
