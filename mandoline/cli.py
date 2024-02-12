@@ -7,16 +7,17 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+matplotlib.use('Agg')
 from mandoline import HeaderData
-from mandoline.utils import sanitize_field_name
-from mandoline.data_reader import slice_box
+from mandoline.utils import sanitize_field_name, plotfile_ndims
+from mandoline.data_reader import slice_box, plate_box
 from mandoline.slice_data import SliceData
 
-matplotlib.use('Agg')
 
 coords_dict = {0:'x',
                1:'y',
-               2:'z'}
+               2:'z',
+               '2D':''}
 
 def main():
     """
@@ -81,11 +82,6 @@ def main():
     else:
         verbose = args.verbose
 
-    # Default output file
-    if args.output is None:
-        outfile_root = f"{args.plotfile}_{coords_dict[args.normal]}"
-    else:
-        outfile_root = args.output
 
     """
     Read the header files and define field and coords
@@ -93,151 +89,174 @@ def main():
     # Header timer 
     header_start = time.time()
 
-    # Define the data needed for the slice
-    # This reads the plotfile and cell headers
-    # And also stores and define the slice data
-    # With default values to pass it to the 
-    # Box reader multiprocessing function
+    # Class to handle slice parameters
     slc = SliceData(args.plotfile, 
                     fields=args.variables, 
                     normal=args.normal, 
                     pos=args.position,
                     limit_level=args.max_level)
 
-    # Timing info
-    if verbose > 0:
-        print("Time to read header files:",
-              np.around(time.time() - header_start, 2))
+    # Default output file
+    if args.output is None:
+        outbase = args.plotfile.split('/')[-1]
+        if slc.ndims == 3:
+            outfile_root = f"{coords_dict[slc.cn]}_{outbase}"
+        else:
+            outfile_root = f"2D_{outbase}"
+    else:
+        outfile_root = args.output
 
-    """
-    Reading the boxes intersecting with the plane
-    """
-    # Object to store the slices
-    plane_data = {}
-    # Multiprocessing pool input template
-    # Passing the SliceData class copies it across
-    # All subprocesses which is slow
-    # For a given level
-    for Lv in range(slc.limit_level + 1):
-        # Box reading timer
-        read_start = time.time()
-        # Divide by level so we can stack later
-        plane_data[Lv] = []
-        # Multiprocessing inputs
-        pool_inputs = []
-        # For each box in that level
-        for idx, box in enumerate(slc.boxes[f"Lv_{Lv}"]):
-            # Check if the box intersect the slicing plane
-            if (box[slc.cn][0] <= slc.pos and 
-                box[slc.cn][1] >= slc.pos):
-                # ----
-                # Here, intersecting boxes at each level
-                # Are added to the slice, even if there are
-                # Higher level boxes covering the lower level
-                # Box region in the plane. This is a little
-                # wastefull as more data is readed than needed
-                # to create the plane, but finding if the box is
-                # Completely covered is a nightmare (and slower).
-                # -----
+    # Case for 2D plotfiles (no slicing required)
+    if slc.ndims == 2:
+        # The slice is just the header data
+
+        # Object to store the slices
+        plane_data = {}
+        # For a given level
+        for Lv in range(slc.limit_level + 1):
+            # Box reading timer
+            read_start = time.time()
+            # Divide by level so we can stack later
+            plane_data[Lv] = []
+            # Multiprocessing inputs
+            pool_inputs = []
+            for indexes, cfile, offset, box in zip(slc.cells[f"Lv_{Lv}"]['indexes'],
+                                                   slc.cells[f"Lv_{Lv}"]['files'],
+                                                   slc.cells[f"Lv_{Lv}"]['offsets'],
+                                                   slc.boxes[f"Lv_{Lv}"]):
                 # Everything needed by the slice reader
                 p_in  = {'cx':slc.cx,
                          'cy':slc.cy,
-                         'cn':slc.cn,
                          'dx':slc.dx,
-                         'pos':slc.pos,
                          'limit_level':slc.limit_level,
                          'fidxs':slc.fidxs,
                          'Lv':Lv,
-                         'idx':idx,
-                         'indexes':slc.cells[f'Lv_{Lv}']['indexes'][idx],
-                         'cfile':slc.cells[f'Lv_{Lv}']['files'][idx],
-                         'offset':slc.cells[f'Lv_{Lv}']['offsets'][idx],
+                         'indexes':indexes,
+                         'cfile':cfile,
+                         'offset':offset,
                          'box':box}
                 pool_inputs.append(p_in) # Add to inputs
+            # Read the data in parallel
+            with multiprocessing.Pool() as pool:
+                plane_data[Lv] = pool.map(plate_box, pool_inputs)
 
-        # Read the data in parallel
-        with multiprocessing.Pool() as pool:
-            plane_data[Lv] = pool.map(slice_box, pool_inputs)
-        if verbose > 0:
-            print(f"Time to read Lv {Lv}:", 
-                  np.around(time.time() - read_start, 2))
-    """
-    Stacking and Interpolation
-    """
-    # Interpolation timer
-    interp_start = time.time()
-    # The box reader returns the slice at both sides of the slicing
-    # Plane if available (i.e. not a boundary, or between boxes). 
-    # This allows handling the case when the slice is between boxes
-    # Array for the "left" side of the plane (could be down whatever)
-    left = {'data':[slc.limit_level_arr() for _ in range(slc.nfidxs)],
-            'normal':slc.limit_level_arr()}
-    # Array for the "right" or up side of the plane
-    # The only convention is that "left" < slice_coordinate < "right"
-    right = {'data':[slc.limit_level_arr() for _ in range(slc.nfidxs)],
-            'normal':slc.limit_level_arr()}
+            if verbose > 0:
+                print(f"Time to read Lv {Lv}:", 
+                      np.around(time.time() - read_start, 2))
 
-    if slc.do_grid_level:
-        grid_level = {'left':slc.limit_level_arr(),
-                      'right':slc.limit_level_arr()}
+        # Broadcast the data to empty arrays
+        all_data = [slc.limit_level_arr() for _ in range(slc.nfidxs)]
 
-    # Parse the multiprocessing output
-    # Do levels sequentially to update with finer data
-    for Lv in plane_data:
-        for output in plane_data[Lv]:
-            # Add the slices if they are defined
-            if output[0] is not None:
-                out = output[0]
+        if slc.do_grid_level:
+            grid_level = slc.limit_level_arr()
+        else:
+            grid_level = None
+
+        # Parse the multiprocessing output
+        # Do levels sequentially to update with finer data
+        for Lv in plane_data:
+            for out in plane_data[Lv]:
+                # Add the slices if they are defined
                 xa, xo = out['sx']  # x slice
                 ya, yo = out['sy']  # y slice
                 # add the field data
-                for i, arr in enumerate(left['data']):
-                    left['data'][i][xa:xo, ya:yo] = out['data'][i]
+                for i in range(slc.nfidxs):
+                    all_data[i][xa:xo, ya:yo] = out['data'][i]
                 # add the normal coordinate
-                left['normal'][xa:xo, ya:yo] = out['normal']
                 # broadcast the grid level to the grid if needed
                 if slc.do_grid_level:
-                    grid_level['left'][xa:xo, ya:yo] = out['level']
-            # Same for the right side
-            if output[1] is not None:
-                out = output[1]
-                xa, xo = out['sx']  # x slice
-                ya, yo = out['sy']  # y slice
-                for i, arr in enumerate(left['data']):
-                    right['data'][i][xa:xo, ya:yo] = out['data'][i]
-                right['normal'][xa:xo, ya:yo] = out['normal']
-                # broadcast the grid level to the grid if needed
-                if slc.do_grid_level:
-                    grid_level['right'][xa:xo, ya:yo] = out['level']
+                    grid_level[xa:xo, ya:yo] = out['level']
 
-    # Do the linear interpolation if normals are not the same
-    # Empty arrays for the final data
-    all_data = []
-    # Boolean slicing array for when the points are the same
-    bint = ~np.isclose(left['normal'], right['normal'])
-    # Iterate with the number of fields
-    for i in range(slc.nfidxs):
-        data = slc.limit_level_arr()
-        # Linear interpolation
-        term1 = left['data'][i][bint] * (right['normal'][bint] - slc.pos) 
-        term2 = right['data'][i][bint] * (slc.pos - left['normal'][bint])
-        term3 = right['normal'][bint] - left['normal'][bint]
-        data[bint] =  (term1 + term2) / term3
-        # Could be either
-        data[~bint] = right['data'][i][~bint]
-        # For some reason
-        all_data.append(data.T)
+        if slc.do_grid_level:
+            all_data.append(grid_level)
+        for i, data in enumerate(all_data):
+            all_data[i] = data.T
+        
 
-    if slc.do_grid_level:
-        # Concatenate both sides
-        all_levels = np.stack([grid_level['right'], grid_level['left']])
-        # I guess the min is better for debuging
-        # All things considered they should be pretty similar
-        all_data.append(np.min(all_levels, axis=0).T)
+    # Case for 3D plotfiles (mandoline time)
+    elif slc.ndims == 3:
 
-    if verbose > 0:
-        print("Interpolation time:", 
-              np.around(time.time() - interp_start, 2), "s")
+        # Define the data needed for the slice
+        # This reads the plotfile and cell headers
+        # And also stores and define the slice data
+        # With default values to pass it to the 
+        # Box reader multiprocessing function
+        slc = SliceData(args.plotfile, 
+                        fields=args.variables, 
+                        normal=args.normal, 
+                        pos=args.position,
+                        limit_level=args.max_level)
+
+        # Timing info
+        if verbose > 0:
+            print("Time to read header files:",
+                  np.around(time.time() - header_start, 2))
+
+        """
+        Reading the boxes intersecting with the plane
+        """
+        # Object to store the slices
+        plane_data = {}
+        # For a given level
+        for Lv in range(slc.limit_level + 1):
+            # Box reading timer
+            read_start = time.time()
+            # Divide by level so we can stack later
+            plane_data[Lv] = []
+            # Multiprocessing inputs
+            pool_inputs = []
+            # For each box in that level
+            for idx, box in enumerate(slc.boxes[f"Lv_{Lv}"]):
+                # Check if the box intersect the slicing plane
+                if (box[slc.cn][0] <= slc.pos and 
+                    box[slc.cn][1] >= slc.pos):
+                    # ----
+                    # Here, intersecting boxes at each level
+                    # Are added to the slice, even if there are
+                    # Higher level boxes covering the lower level
+                    # Box region in the plane. This is a little
+                    # wastefull as more data is readed than needed
+                    # to create the plane, but finding if the box is
+                    # Completely covered is a nightmare (and slower).
+                    # -----
+                    # Everything needed by the slice reader
+                    p_in  = {'cx':slc.cx,
+                             'cy':slc.cy,
+                             'cn':slc.cn,
+                             'dx':slc.dx,
+                             'pos':slc.pos,
+                             'limit_level':slc.limit_level,
+                             'fidxs':slc.fidxs,
+                             'Lv':Lv,
+                             'indexes':slc.cells[f'Lv_{Lv}']['indexes'][idx],
+                             'cfile':slc.cells[f'Lv_{Lv}']['files'][idx],
+                             'offset':slc.cells[f'Lv_{Lv}']['offsets'][idx],
+                             'box':box}
+                    pool_inputs.append(p_in) # Add to inputs
+
+            # Read the data in parallel
+            with multiprocessing.Pool() as pool:
+                plane_data[Lv] = pool.map(slice_box, pool_inputs)
+            if verbose > 0:
+                print(f"Time to read Lv {Lv}:", 
+                      np.around(time.time() - read_start, 2))
+        """
+        Stacking and Interpolation
+        """
+        # Interpolation timer
+        interp_start = time.time()
+        # The box reader returns the slice at both sides of the slicing
+        # Plane if available (i.e. not a boundary, or between boxes). 
+        # This allows handling the case when the slice is between boxes
+        # This function interpolate between the two planes and returns
+        # A list of the interpolated data arrays
+        all_data = slc.reducemp_data_ortho(plane_data)
+
+        if verbose > 0:
+            print("Interpolation time:", 
+                  np.around(time.time() - interp_start, 2), "s")
+    else:
+        raise ValueError(f"Number of dimensions {ndims} not supported")
 
     """
     Output the slice
@@ -277,12 +296,13 @@ def main():
         # Add info to output if single field
         if len(args.variables) == 1:
             fname = sanitize_field_name(args.variables[0])
-            outfile = '_'.join([outfile_root, fname])
+            outfile = '_'.join([fname, outfile_root])
         else:
             outfile = outfile_root
-        # Pickle into the jar
-        pfile = open(outfile + ".pkl", 'wb')
-        pickle.dump(output, pfile)
+        # Save with numpy so we can np.load
+        np_file = outfile + ".npz"
+        np.savez_compressed(np_file, **output)
+
         if verbose > 0:
             print("Time to save uniform grid:", 
                   np.around(time.time() - output_start, 2), "s")

@@ -171,13 +171,14 @@ def read_bin_parallel(args):
         arr = np.fromfile(f, "float64", byte_size)
     return x_points, y_points, arr
 
-field = "mag_vort"
-limit_level = 4
+field = "temp"
+limit_level = None
 print("Problem setup time:", np.around(time.time() - now, 2), "s")
 
 now = time.time()
 filename = sys.argv[1]
 hdr = HeaderData(filename, limit_level=limit_level)
+limit_level = hdr.max_level
 print("Header reading time:", np.around(time.time() - now, 2), "s")
 now = time.time()
 

@@ -1,7 +1,7 @@
 import numpy as np
 import cantera as ct
+import multiprocessing as mp
 import os
-
 
 MECH = os.environ["CANTERA_MECH"]
 GAS = ct.Solution(MECH)

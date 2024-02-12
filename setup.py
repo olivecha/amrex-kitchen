@@ -26,6 +26,7 @@ setuptools.setup(
         "console_scripts": [
             "mandoline = mandoline.cli:main",
             "cuisine = mandoline.cook_cli:main",
+            "colander = mandoline.colander_cli:main",
         ]
     }
 )

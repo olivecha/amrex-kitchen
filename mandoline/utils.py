@@ -1,3 +1,4 @@
+import os
 import numpy as np
 
 
@@ -33,3 +34,15 @@ def sanitize_field_name(fname):
     """
 
     return fname.replace('(','_').replace(')','')
+
+def plotfile_ndims(pfile):
+    """
+    Quick check of the dimensions of the plotfile
+    """
+    with open(os.path.join(pfile, 'Header')) as hfile:
+        hfile.readline()
+        nfields = int(hfile.readline())
+        for i in range(nfields):
+            hfile.readline()
+        return int(hfile.readline())
+

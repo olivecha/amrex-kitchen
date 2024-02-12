@@ -29,7 +29,6 @@ def slice_box(args):
             'level' : amr_level}                   # AMR level of the data
     """
     # Unpack input
-    idx = args['idx']
     Lv = args['Lv']
     pos = args['pos']
     fidxs = args['fidxs']
@@ -170,5 +169,80 @@ def slice_box(args):
     return output 
 
 
-def plate():
-    pass
+def plate_box(args):
+    """
+    Multiprocessing function reading a 2D AMR cell
+    ----
+    Input:
+    single input argument for multiprocessing
+
+    TODO: replace with actual input
+    (index, level, slicedata) = args 
+    index: Index of the cell to read (int)
+    level: Current AMR Level of the cell (int)
+    slicedata: SliceData instance containing the slice information
+
+    Output:
+    data = {'sx'    : [x_start, x_stop],           # Slice indexes in x-direction
+            'sy'    : [y_start, y_stop],           # Slice indexes in y-direction
+            'data'  : [arr[x_shape, y_shape], ...] # Arrays containing the data
+            'level' : amr_level}                   # AMR level of the data
+    """
+    # Unpack input
+    Lv = args['Lv']
+    fidxs = args['fidxs']
+    limit_level = args['limit_level']
+    # Get the cell data from the HeaderData class
+    indexes = args['indexes']
+    cfile = args['cfile']
+    offset = args['offset']
+    box = args['box']
+    cx = args['cx']
+    cy = args['cy']
+    dx = args['dx']
+    # Factor between curent grid and covering grid
+    factor = 2**(limit_level - Lv)
+    # Compute the slice indexes for the global grid
+    x_start = indexes[0][cx] * factor
+    x_stop = (indexes[1][cx] + 1) * factor
+    y_start = indexes[0][cy] * factor
+    y_stop = (indexes[1][cy] + 1) * factor
+    shape = (indexes[1][0] - indexes[0][0] + 1,
+             indexes[1][1] - indexes[0][1] + 1,)
+
+    # Size on disk of the data slice
+    byte_size = np.prod(shape)
+    # A list of arrays for output
+    data_arrays = []
+    # Open the binary file even if we may be only looking
+    # For the grid level
+    with open(cfile, "rb") as f:
+        # For each field index
+        for fidx in fidxs:
+            # Try to catch fidx = None
+            try:
+                # Go to the cell start
+                f.seek(offset)
+                # Skip the header
+                f.readline()
+                # Go to the field we want
+                f.seek(byte_size*8*fidx, 1)
+                # Could be optimized by reading contiguous fields
+                # At once especially if all the data is requested
+                # Read the data
+                arr = np.fromfile(f, "float64", byte_size)
+                # Fortran order perhaps a legacy of the early AMReX
+                # versions
+                arr = arr.reshape(shape, order="F")
+                data_arrays.append(arr)
+            # If fidx is None (for grid_level) we catch it 
+            except TypeError:
+                # level is always added to the output
+                pass
+    # No mandoline here
+    output = {'sx':[x_start, x_stop], 
+              'sy':[y_start, y_stop],  # Slice in limit_level grid
+              'data':[expand_array(arr, factor) for arr in data_arrays], 
+              'level':Lv}
+
+    return output 

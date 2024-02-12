@@ -2,11 +2,11 @@
 Recipe to filters a field from a plotfile
 """
 
-def colander_generator(key):
+class Colander():
     
-    def colander(data):
-        return data[key]
-    colander.__doc__ = key
-    
-    return colander
+    def __init__(self, key):
+        self.key = key
+
+    def __call__(self, data):
+        return data[self.key]
         
