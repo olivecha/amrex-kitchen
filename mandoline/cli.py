@@ -46,6 +46,9 @@ def main():
             "--max_level", "-L", type=int,
             help="Maximum AMR level loaded, defaults to finest level")
     parser.add_argument(
+            "--serial", "-s", action='store_true',
+            help="Flag to disable multiprocessing")
+    parser.add_argument(
             "--format", "-f", type=str,
             help=("Either image or array "
                   "image: creates and saves an image using matplotlib "
@@ -106,6 +109,12 @@ def main():
     else:
         outfile_root = args.output
 
+    # Define the workers pool if needed
+    if args.serial:
+        pass
+    else:
+        pool = multiprocessing.Pool()
+
     # Case for 2D plotfiles (no slicing required)
     if slc.ndims == 2:
         # The slice is just the header data
@@ -137,7 +146,9 @@ def main():
                          'box':box}
                 pool_inputs.append(p_in) # Add to inputs
             # Read the data in parallel
-            with multiprocessing.Pool() as pool:
+            if args.serial:
+                plane_data[Lv] = list(map(plate_box, pool_inputs))
+            else:
                 plane_data[Lv] = pool.map(plate_box, pool_inputs)
 
             if verbose > 0:
@@ -234,9 +245,12 @@ def main():
                              'box':box}
                     pool_inputs.append(p_in) # Add to inputs
 
-            # Read the data in parallel
-            with multiprocessing.Pool() as pool:
+            # Read the data in parallel (or serial)
+            if args.serial:
+                plane_data[Lv] = list(map(slice_box, pool_inputs))
+            else:
                 plane_data[Lv] = pool.map(slice_box, pool_inputs)
+
             if verbose > 0:
                 print(f"Time to read Lv {Lv}:", 
                       np.around(time.time() - read_start, 2))
