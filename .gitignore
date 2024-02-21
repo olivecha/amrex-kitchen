@@ -5,3 +5,4 @@ mandoline/__pycache__
 .ipynb_checkpoints
 test/__pycache__
 .DS_Store
+*example*
