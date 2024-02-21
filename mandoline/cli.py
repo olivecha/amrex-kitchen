@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import shutil
 import argparse
 import multiprocessing
 import pickle
@@ -40,7 +41,7 @@ def main():
     parser.add_argument(
             "--variables", "-v", type=str, nargs='+',
             help=("variables names to slice, defaults to \"density\""
-                  "\"all\" slices all the fields in the plotfile"
+                  ", \"all\" slices all the fields in the plotfile, "
                   "\"grid_level\" outputs the AMR grid level data"))
     parser.add_argument(
             "--max_level", "-L", type=int,
@@ -50,10 +51,14 @@ def main():
             help="Flag to disable multiprocessing")
     parser.add_argument(
             "--format", "-f", type=str,
-            help=("Either image or array "
-                  "image: creates and saves an image using matplotlib "
-                  "array: creates a numpy array with a 500x500 uniform grid "
-                  "and saves it as a pickle file of a python dict"))
+            help=("""Either "image", "array" or "plotfile".
+                  image: creates and saves an image using matplotlib.
+                  array: creates a numpy array with a uniform grid
+                  with the resolution of --max_level and saves it
+                  as a numpy file with separated fields.
+                  plotfile: Keep the adaptive mesh refinement information
+                  and save the slice and specified fields in a 2D amrex
+                  plotfile"""))
     parser.add_argument(
             "--output", "-o", type=str,
             help="Output file name used to override the default value")
@@ -115,10 +120,15 @@ def main():
     else:
         pool = multiprocessing.Pool()
 
-    # Case for 2D plotfiles (no slicing required)
+    """
+    Case for 2D plotfiles (no slicing required)
+    """
     if slc.ndims == 2:
+        #TODO: Use colander to remove fields from 2D plotfiles
+        if args.format == "plotfile":
+            raise NotImplementedError("TODO (you can use amrex-kitchen/"
+                                      "colander")
         # The slice is just the header data
-
         # Object to store the slices
         plane_data = {}
         # For a given level
@@ -180,6 +190,7 @@ def main():
 
         if slc.do_grid_level:
             all_data.append(grid_level)
+
         for i, data in enumerate(all_data):
             all_data[i] = data.T
         
@@ -239,6 +250,7 @@ def main():
                              'limit_level':slc.limit_level,
                              'fidxs':slc.fidxs,
                              'Lv':Lv,
+                             'bidx':idx,
                              'indexes':slc.cells[f'Lv_{Lv}']['indexes'][idx],
                              'cfile':slc.cells[f'Lv_{Lv}']['files'][idx],
                              'offset':slc.cells[f'Lv_{Lv}']['offsets'][idx],
@@ -246,6 +258,10 @@ def main():
                     pool_inputs.append(p_in) # Add to inputs
 
             # Read the data in parallel (or serial)
+            # The box reader returns the slice at both sides of the slicing
+            # Plane if available (i.e. not a boundary, or between boxes). 
+            # This allows handling the case when the slice is between boxes
+            # This function interpolate between the two planes and returns
             if args.serial:
                 plane_data[Lv] = list(map(slice_box, pool_inputs))
             else:
@@ -259,12 +275,13 @@ def main():
         """
         # Interpolation timer
         interp_start = time.time()
-        # The box reader returns the slice at both sides of the slicing
-        # Plane if available (i.e. not a boundary, or between boxes). 
-        # This allows handling the case when the slice is between boxes
-        # This function interpolate between the two planes and returns
         # A list of the interpolated data arrays
-        all_data = slc.reducemp_data_ortho(plane_data)
+        if (args.format == "array" or
+            args.format == "image"):
+            all_data = slc.reducemp_data_ortho(plane_data)
+
+        elif args.format == "plotfile":
+            all_data_bylevel, indexes, headers  = slc.interpolate_bylevel(plane_data)
 
         if verbose > 0:
             print("Interpolation time:", 
@@ -276,27 +293,37 @@ def main():
     Output the slice
     """
     output_start = time.time()
-    # Define the limit level coodinates vectors
-    # TODO: move this to SliceData as a method
-    x_grid = np.linspace(slc.geo_low[slc.cx]  + slc.dx[slc.limit_level][slc.cx]/2,
-                         slc.geo_high[slc.cx] - slc.dx[slc.limit_level][slc.cx]/2,
-                         slc.grid_sizes[slc.limit_level][slc.cx])
 
-    y_grid = np.linspace(slc.geo_low[slc.cy]  + slc.dx[slc.limit_level][slc.cy]/2,
-                         slc.geo_high[slc.cy] - slc.dx[slc.limit_level][slc.cy]/2,
-                         slc.grid_sizes[slc.limit_level][slc.cy])
-
-    # Case when we slice all the values
-    if 'all' in args.variables:
-        field_names = [name for name in slc.fields]
-    else:
-        # Treat grid_level differently
-        field_names = [name for name in args.variables if name != 'grid_level']
+    # Define the saved fields
+    all_names = [name for name in slc.fields]
+    field_names = [all_names[idx] for idx in slc.fidxs if idx is not None]
+    
+    if args.format == "plotfile":
+        # Define the plotfile name
+        if len(field_names) == 1:
+            fname = sanitize_field_name(field_names[0])
+            outfile = '_'.join([outfile_root, fname])
+        else:
+            outfile = outfile_root
+        # Remove if exists ?
+        if outfile in os.listdir():
+            do_remove = input(f"{outfile} already exists remove ? (y/n) ")
+            if do_remove == 'y':
+                shutil.rmtree(outfile)
+        # Create the plotfile dir
+        os.mkdir(outfile)
+        # Rewrite the header
+        with open(os.path.join(outfile, "Header"), "w") as hfile:
+            slc.write_2d_slice_global_header(hfile,
+                                             field_names,
+                                             indexes)
+        # Write the level data
         
 
     # Array output
-    if args.format == "array":
+    elif args.format == "array":
         # Make a dict with output
+        x_grid, y_grid = slc.slice_plane_coordinates()
         output = {'x': x_grid,
                   'y': y_grid,}
         # Store in output
@@ -322,7 +349,9 @@ def main():
                   np.around(time.time() - output_start, 2), "s")
 
     # Image output
-    else:
+    elif args.format == "image":
+        # Compute grids
+        x_grid, y_grid = slc.slice_plane_coordinates()
         # Use log scale ?
         if args.log:
             norm = matplotlib.colors.LogNorm()

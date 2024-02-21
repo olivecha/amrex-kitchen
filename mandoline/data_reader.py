@@ -72,7 +72,7 @@ def slice_box(args):
                 # Go to the cell start
                 f.seek(offset)
                 # Skip the header
-                f.readline()
+                header = f.readline()
                 # Go to the field we want
                 f.seek(byte_size*8*fidx, 1)
                 # Could be optimized by reading contiguous fields
@@ -165,6 +165,9 @@ def slice_box(args):
                      'data':[expand_array(arr, factor).copy() for arr in arr_data], 
                      'normal':normal_grid[idx_right],  # normal position for interpolation
                      'level':Lv}
+    # Keep to recreate the 2D plotfile
+    output.append(header)
+    output.append(args["bidx"])
 
     return output 
 
@@ -224,7 +227,7 @@ def plate_box(args):
                 # Go to the cell start
                 f.seek(offset)
                 # Skip the header
-                f.readline()
+                header = f.readline()
                 # Go to the field we want
                 f.seek(byte_size*8*fidx, 1)
                 # Could be optimized by reading contiguous fields
@@ -243,6 +246,7 @@ def plate_box(args):
     output = {'sx':[x_start, x_stop], 
               'sy':[y_start, y_stop],  # Slice in limit_level grid
               'data':[expand_array(arr, factor) for arr in data_arrays], 
-              'level':Lv}
+              'level':Lv,
+              'header':header}
 
     return output 

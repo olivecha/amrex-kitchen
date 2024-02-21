@@ -14,7 +14,7 @@ class HeaderData(object):
         self.pfile = plotfile
         filepath = os.path.join(plotfile, 'Header')
         with open(filepath) as hfile:
-            _ = hfile.readline()
+            self.version = hfile.readline()
             # field names
             self.nvars = int(hfile.readline())
             self.fields = {}
@@ -31,7 +31,7 @@ class HeaderData(object):
             for block in hfile.readline().split()[1::3]:
                 grid_size = np.array(block.replace('(', '').replace(")", '').split(','), dtype=int)
                 self.grid_sizes.append(grid_size + 1)
-            step_numbers = [int(n) for n in hfile.readline().split()]
+            self.step_numbers = [int(n) for n in hfile.readline().split()]
             # Grid resolutions
             resolutions = []
             for i in range(self.max_level + 1):
