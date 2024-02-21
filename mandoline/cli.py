@@ -307,9 +307,7 @@ def main():
             outfile = outfile_root
         # Remove if exists ?
         if outfile in os.listdir():
-            do_remove = input(f"{outfile} already exists remove ? (y/n) ")
-            if do_remove == 'y':
-                shutil.rmtree(outfile)
+            shutil.rmtree(outfile)
         # Create the plotfile dir
         os.mkdir(outfile)
         # Rewrite the header
@@ -318,7 +316,15 @@ def main():
                                              field_names,
                                              indexes)
         # Write the level data
-        
+        # TODO: could be done with multiprocessing
+        for lv in range(slc.limit_level + 1):
+            slc.write_cell_data_at_level(outfile,
+                                         lv,
+                                         all_data_bylevel[lv],
+                                         indexes[lv])
+        print("Time to save AMReX plotfile: ", 
+              np.around(time.time() - output_start, 2))
+
 
     # Array output
     elif args.format == "array":

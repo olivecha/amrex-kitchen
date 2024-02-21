@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from mandoline import HeaderData
 
@@ -326,13 +327,13 @@ class SliceData(HeaderData):
         # Make the directory
         os.mkdir(os.path.join(outfile, f"Level_{lv}"))
         # Factor between lv and limit level data
-        factor = 2**(limit_level - Lv)
+        factor = 2**(self.limit_level - lv)
         # Determine how many cell files to use
         # I dont know what amrex does lets target 1 MB per cell file
         total_size = 0
         cell_indexes = []
         for idx in indexes:
-            cidx = self.cells["Lv_{lv}"]["indexes"][idx]
+            cidx = self.cells[f"Lv_{lv}"]["indexes"][idx]
             cell_indexes.append(cidx)
             size_x = cidx[1][self.cx] - cidx[0][self.cx] + 1
             size_y = cidx[1][self.cy] - cidx[0][self.cy] + 1
@@ -340,26 +341,26 @@ class SliceData(HeaderData):
 
         # Divide by 1 MB and add one so there is a file
         nfiles = total_size // int(1e6) + 1
+        chunk_size = len(cell_indexes) // nfiles
 
         # Filenames
         fnames = [f"Cell_D_{n:05d}" for n in range(nfiles)]
         # Store offsets for each file
         offsets = []
         # For each chunk
-        for cfile, i in zip(fnames, range(0, len(indexes), nfiles)):
+        for cfile, i in zip(fnames, range(0, chunk_size, nfiles)):
             with open(os.path.join(outfile, f"Level_{lv}", cfile), "wb") as bfile:
                 curr_offsets = []
-                subcells_indexes = cell_indexes[i:i+nfiles]
-                subcells_headers = headers[i:i+nfiles]
-                for idxs, hdr in zip(subcell_indexes, subcells_headers):
+                subcells_indexes = cell_indexes[i:i+chunk_size]
+                for idxs in subcells_indexes:
                     offset = bfile.tell()
                     curr_offsets.append(offset)
                     curr_data = []
                     # Compute the slice indexes for the global grid
-                    x_start = idxs[0][cx] * factor
-                    x_stop = (idxs[1][cx] + 1) * factor
-                    y_start = idxs[0][cy] * factor
-                    y_stop = (idxs[1][cy] + 1) * factor
+                    x_start = idxs[0][self.cx] * factor
+                    x_stop = (idxs[1][self.cx] + 1) * factor
+                    y_start = idxs[0][self.cy] * factor
+                    y_stop = (idxs[1][self.cy] + 1) * factor
                     # For each field
                     for arr in lvdata:
                         # Read the data
@@ -372,10 +373,10 @@ class SliceData(HeaderData):
                                   "(8, (8 7 6 5 4 3 2 1)))")
                     new_header += (f"(({idxs[0][self.cx]},{idxs[0][self.cy]}) "
                                    f"({idxs[1][self.cx]},{idxs[1][self.cy]}) ")
-                    new_header += " (0,0,0)) {self.nfidxs}\n"
-                    bfile.write(new_header.encode("ascii")
+                    new_header +=  f"(0,0)) {self.nfidxs}\n"
+                    bfile.write(new_header.encode("ascii"))
                     bfile.write(np.hstack(curr_data).tobytes())
-            offsets.append(curr_offsets)
+                offsets.append(curr_offsets)
 
         # Write the cell header
         with open(os.path.join(outfile, f"Level_{lv}", "Cell_H"), "w") as hfile:
@@ -394,10 +395,10 @@ class SliceData(HeaderData):
                              f"({cidxs[1][self.cx]},{cidxs[1][self.cy]}) "
                               "(0,0))\n")
             hfile.write(")\n")
-            hfile.write("{len(indexes)}\n")
+            hfile.write(f"{len(indexes)}\n")
             for bfname, bfoffsets in zip(fnames, offsets):
                 for offset in bfoffsets:
-                    hfile.write(f"FabOnDisk: {hfile} {offset}\n")
+                    hfile.write(f"FabOnDisk: {bfname} {offset}\n")
 
                 
 
