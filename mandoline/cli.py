@@ -98,11 +98,29 @@ def main():
     header_start = time.time()
 
     # Class to handle slice parameters
+    # Define the data needed for the slice
+    # This reads the plotfile and cell headers
+    # And also stores and define the slice data
+    # With default values to pass it to the 
+    # Box reader multiprocessing function
     slc = SliceData(args.plotfile, 
                     fields=args.variables, 
                     normal=args.normal, 
                     pos=args.position,
                     limit_level=args.max_level)
+
+    # Timing info
+    header_time = time.time() - header_start
+    if verbose > 0:
+        print("Time to read header files:",
+              np.around(time.time() - header_start, 2))
+        if args.serial:
+            pass
+        elif header_time < 0.1:
+            print("This plotfile seems small you may consider "
+                  "reading it in serial")
+        else:
+            pass
 
     # Default output file
     if args.output is None:
@@ -195,28 +213,10 @@ def main():
             all_data[i] = data.T
         
 
-    # Case for 3D plotfiles (mandoline time)
+        """
+        Case for 3D plotfiles (mandoline time)
+        """
     elif slc.ndims == 3:
-
-        # Define the data needed for the slice
-        # This reads the plotfile and cell headers
-        # And also stores and define the slice data
-        # With default values to pass it to the 
-        # Box reader multiprocessing function
-        slc = SliceData(args.plotfile, 
-                        fields=args.variables, 
-                        normal=args.normal, 
-                        pos=args.position,
-                        limit_level=args.max_level)
-
-        # Timing info
-        if verbose > 0:
-            print("Time to read header files:",
-                  np.around(time.time() - header_start, 2))
-
-        """
-        Reading the boxes intersecting with the plane
-        """
         # Object to store the slices
         plane_data = {}
         # For a given level
@@ -275,11 +275,12 @@ def main():
         """
         # Interpolation timer
         interp_start = time.time()
-        # A list of the interpolated data arrays
+        # Process the sliced box to create uniform grids
         if (args.format == "array" or
             args.format == "image"):
             all_data = slc.reducemp_data_ortho(plane_data)
 
+        # For plotfiles we keep the data needed to reconstruct the multilevel grid
         elif args.format == "plotfile":
             all_data_bylevel, indexes, headers  = slc.interpolate_bylevel(plane_data)
 
