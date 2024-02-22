@@ -238,7 +238,7 @@ class SliceData(HeaderData):
 
         return all_data, box_indexes, box_headers
 
-    def slice_plane_coordinate(self):
+    def slice_plane_coordinates(self):
         """
         Return the x and y grid corresponding to the slice
         array coordinates to plot the data after output
@@ -310,7 +310,7 @@ class SliceData(HeaderData):
             fobj.write(f"{self.step_numbers[lv]}\n")
             # Write the 2D boxes
             for idx in indexes[lv]:
-                box = self.boxes[f"Lv_{lv}"][idx]
+                box = self.boxes[lv][idx]
                 fobj.write(f"{box[self.cx][0]} {box[self.cx][1]}\n")
                 fobj.write(f"{box[self.cy][0]} {box[self.cy][1]}\n")
             # Write the Level path info

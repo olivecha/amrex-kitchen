@@ -56,9 +56,9 @@ class HeaderData(object):
         Read the AMR boxes geometry in the base header file
         """
         # dicts to store box bounds and centers
-        points = {}
-        boxes = {}
-        self.npoints = {}
+        points = []
+        boxes = []
+        self.npoints = []
         self.cell_paths = []
         # Loop over the grid levels
         for lv in range(self.limit_level + 1):
@@ -74,10 +74,9 @@ class HeaderData(object):
             # Sanity check
             assert current_level == lv
             # Key for the dict
-            level_key = f"Lv_{current_level}"
-            self.npoints[level_key] = n_cells
-            points[level_key] = []
-            boxes[level_key] = []
+            self.npoints.append(n_cells)
+            lv_points = []
+            lv_boxes = []
             for i in range(n_cells):
                 point = []
                 box = []
@@ -85,12 +84,11 @@ class HeaderData(object):
                     lo, hi = [float(n) for n in hfile.readline().split()]
                     box.append([lo, hi])
                     point.append(lo + (hi - lo)/2)
-                points[level_key].append(point)
-                boxes[level_key].append(box)
+                lv_points.append(point)
+                lv_boxes.append(box)
             self.cell_paths.append(hfile.readline().replace('\n', ''))
-        for ky in points:
-            points[ky] = np.array(points[ky])
-            boxes[ky] = np.array(boxes[ky])
+            points.append(lv_points)
+            boxes.append(lv_boxes)
         return points, boxes
 
     def read_cell_headers(self):

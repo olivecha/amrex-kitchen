@@ -160,7 +160,7 @@ def main():
             for indexes, cfile, offset, box in zip(slc.cells[f"Lv_{Lv}"]['indexes'],
                                                    slc.cells[f"Lv_{Lv}"]['files'],
                                                    slc.cells[f"Lv_{Lv}"]['offsets'],
-                                                   slc.boxes[f"Lv_{Lv}"]):
+                                                   slc.boxes[Lv]):
                 # Everything needed by the slice reader
                 p_in  = {'cx':slc.cx,
                          'cy':slc.cy,
@@ -228,7 +228,7 @@ def main():
             # Multiprocessing inputs
             pool_inputs = []
             # For each box in that level
-            for idx, box in enumerate(slc.boxes[f"Lv_{Lv}"]):
+            for idx, box in enumerate(slc.boxes[Lv]):
                 # Check if the box intersect the slicing plane
                 if (box[slc.cn][0] <= slc.pos and 
                     box[slc.cn][1] >= slc.pos):
