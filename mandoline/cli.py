@@ -50,7 +50,7 @@ def main():
             "--serial", "-s", action='store_true',
             help="Flag to disable multiprocessing")
     parser.add_argument(
-            "--format", "-f", type=str,
+            "--format", "-f", type=str, default="image",
             help=("""Either "image", "array" or "plotfile".
                   image: creates and saves an image using matplotlib.
                   array: creates a numpy array with a uniform grid
@@ -89,7 +89,6 @@ def main():
         verbose = 1
     else:
         verbose = args.verbose
-
 
     """
     Read the header files and define field and coords
