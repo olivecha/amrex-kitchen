@@ -344,13 +344,13 @@ class SliceData(HeaderData):
         chunk_size = len(cell_indexes) // nfiles
 
         # Filenames
-        fnames = [f"Cell_D_{n:05d}" for n in range(nfiles)]
+        fnames = [f"Cell_D_{n:05d}" for n in range(nfiles + 1)]
         # Store offsets for each file
         offsets = []
         field_max_vals = []
         field_min_vals = []
         # For each chunk
-        for cfile, i in zip(fnames, range(0, chunk_size, nfiles)):
+        for cfile, i in zip(fnames, range(0, len(cell_indexes), chunk_size)):
             with open(os.path.join(outfile, f"Level_{lv}", cfile), "wb") as bfile:
                 curr_offsets = []
                 subcells_indexes = cell_indexes[i:i+chunk_size]
