@@ -347,6 +347,8 @@ class SliceData(HeaderData):
         fnames = [f"Cell_D_{n:05d}" for n in range(nfiles)]
         # Store offsets for each file
         offsets = []
+        field_max_vals = []
+        field_min_vals = []
         # For each chunk
         for cfile, i in zip(fnames, range(0, chunk_size, nfiles)):
             with open(os.path.join(outfile, f"Level_{lv}", cfile), "wb") as bfile:
@@ -356,6 +358,8 @@ class SliceData(HeaderData):
                     offset = bfile.tell()
                     curr_offsets.append(offset)
                     curr_data = []
+                    curr_field_min = []
+                    curr_field_max = []
                     # Compute the slice indexes for the global grid
                     x_start = idxs[0][self.cx] * factor
                     x_stop = (idxs[1][self.cx] + 1) * factor
@@ -367,7 +371,14 @@ class SliceData(HeaderData):
                         data = arr[x_start:x_stop, y_start:y_stop]
                         # Downsize to current level
                         data = data[::factor, ::factor]
+                        # Store the min/max values in the cell
+                        curr_field_min.append(np.min(data))
+                        curr_field_max.append(np.max(data))
+                        # Append the cell data to be written in binary
                         curr_data.append(data.flatten(order="F"))
+                    # Append the min max values for each cell
+                    field_min_vals.append(curr_field_min)
+                    field_max_vals.append(curr_field_max)
                     # Redefine the header
                     new_header = ("FAB ((8, (64 11 52 0 1 12 0 1023)),"
                                   "(8, (8 7 6 5 4 3 2 1)))")
@@ -399,27 +410,24 @@ class SliceData(HeaderData):
             for bfname, bfoffsets in zip(fnames, offsets):
                 for offset in bfoffsets:
                     hfile.write(f"FabOnDisk: {bfname} {offset}\n")
+            # Empty line
+            hfile.write('\n')
+            # Number of cells number of fields
+            hfile.write(f"{len(indexes)},{self.nfidxs}\n")
+            # For each cell write the minimum value
+            for min_arr in field_min_vals:
+                # Scientific notation with 16 digits
+                line = ','.join([f"{num:.16e}" for num in min_arr])
+                hfile.write(line + ',\n')
+            # Empty line
+            hfile.write('\n')
+            # Number of cells number of fields
+            hfile.write(f"{len(indexes)},{self.nfidxs}\n")
+            # For each cell write the maximum value
+            for max_arr in field_max_vals:
+                # Scientific notation with 16 digits
+                line = ','.join([f"{num:.16e}" for num in max_arr])
+                hfile.write(line + ',\n')
 
-                
-
-
-
-
-
-
-                
-
-
-
-
-        
-            
-        lv_shape = self.grid_sizes[lv]
-        size_x = lv_shape[self.cx]
-        size_y = lv_shape[self.cy]
-        nfields = self.nfidxs
-        lv_size = size_x * size_y * nfields * 8
-        
-        
 
 
