@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from mandoline import HeaderData
+from amr_kitchen import HeaderData
 
 class TestSliceData(unittest.TestCase):
     pfile2d = "test_assets/example_plt_2d"

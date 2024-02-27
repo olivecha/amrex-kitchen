@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from mandoline.slice_data import SliceData
+from amr_kitchen.mandoline import SliceData
 
 class TestSliceData(unittest.TestCase):
 
