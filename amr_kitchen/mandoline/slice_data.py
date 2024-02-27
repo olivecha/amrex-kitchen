@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from mandoline import HeaderData
+from amr_kitchen import HeaderData
 
 
 class SliceData(HeaderData):
