@@ -4,10 +4,10 @@ with open("README.md", "r", encoding="utf-8") as fhand:
     long_description = fhand.read()
 
 setuptools.setup(
-    name="mandoline",
-    version="0.0.1",
+    name="amr_kitchen",
+    version="1.0.0",
     author="Olivier Chabot",
-    description=("Fast approximate slices of AMReX plotfiles"),
+    description=("A Toolbox to manipulate AMReX plotfiles"),
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/olivecha/mandoline",
@@ -24,8 +24,7 @@ setuptools.setup(
     python_requires=">=3.6",
     entry_points={
         "console_scripts": [
-            "mandoline = mandoline.cli:main",
-            "cuisine = mandoline.cook_cli:main",
+            "mandoline = amr_kitchen.mandoline.cli:main",
             "colander = mandoline.colander_cli:main",
         ]
     }
