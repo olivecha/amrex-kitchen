@@ -25,7 +25,7 @@ setuptools.setup(
     entry_points={
         "console_scripts": [
             "mandoline = amr_kitchen.mandoline.cli:main",
-            "colander = mandoline.colander_cli:main",
+            "colander = amr_kitchen.colander.cli:main",
         ]
     }
 )
