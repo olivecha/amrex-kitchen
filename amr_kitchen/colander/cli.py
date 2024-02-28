@@ -40,13 +40,11 @@ def main():
         os.environ["CANTERA_MECH"] = args.mech
 
     from mandoline import HeaderData, parallel_cook, parallel_cook_byarray
+    from mandoline.colander import Colander
 
     # what are we cooking
-    if args.recipe.split('.')[-1] == 'py':
-        pass
-    else:
-        from mandoline.cookbook import recipes
-        recipe = recipes[args.recipe]
+    recipe = Colander(args.recipe)
+    recipe.__doc__ = args.recipe
 
     # Header data
     hdr = HeaderData(args.plotfile, limit_level=args.limit_level)
@@ -82,15 +80,14 @@ def main():
                        "ncells":len(level_files)}
             call_args.append(mp_args)
         cook_start = time.time()
+        print(call_args[0]["recipe"])
         print(f"Cooking Level {Lv}...")
         # One process per file
-        #with multiprocessing.Pool() as pool:
-        #new_offsets_stack = p_map(parallel_cook_byarray, call_args, num_cpus=args.num_cpus)
         new_offsets_stack = []
-        pool = Pool(16)
-        new_offsets_stack = pool.map(parallel_cook_byarray, call_args)
+        pool = Pool()
+        new_offsets_stack = pool.map(parallel_cook, call_args)
         #for arg in tqdm(call_args):
-        #    new_offsets_stack.append(parallel_cook_byarray(arg))
+        #    new_offsets_stack.append(parallel_cook(arg))
         
         print(f"Done!", f"({np.around(time.time() - cook_start, 2)} s)")
         # Reduce arrays together
