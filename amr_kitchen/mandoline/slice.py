@@ -3,7 +3,7 @@ import numpy as np
 from amr_kitchen import HeaderData
 
 
-class SliceData(HeaderData):
+class Slice(HeaderData):
     """
     Class containing the slicing data to supply to the
     multiprocessing function
@@ -428,6 +428,3 @@ class SliceData(HeaderData):
                 # Scientific notation with 16 digits
                 line = ','.join([f"{num:.16e}" for num in max_arr])
                 hfile.write(line + ',\n')
-
-
-

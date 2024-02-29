@@ -1,50 +1,45 @@
 import os
-import billiard as mp
 from p_tqdm import p_map
-from concurrent.futures import ProcessPoolExecutor as Pool
+from multiprocessing import Pool
 from tqdm import tqdm
 import time
 import numpy as np
 import argparse
+from mandoline import HeaderData, parallel_cook, parallel_cook_byarray
+from mandoline.colander import Colander
 
 
 def main():
     # Argument parser
     parser = argparse.ArgumentParser(
-            description="Post processing utilisty for AMReX plotfiles")
+            description="Remove field and levels from AMReX plotfiles")
 
     parser.add_argument(
             "plotfile", type=str,
-            help="Path of the plotfile to cook")
+            help="Path of the plotfile to filter")
     parser.add_argument(
-            "--recipe", "-r", type=str,
-            help=("Path to a script containing a recipe function, or"
-                  "key of a predetermine function (see --help)"))
-    parser.add_argument(
-            "--mech", "-m", type=str,
-            help=("Path to a Cantera kinetics mechanism (if the recipe"
-                  " uses Cantera)"))
+            "--variables", "-r", type=str, nargs='+',
+            help=("Variable to keep in the filtered plotfile"))
     parser.add_argument(
             "--limit_level", "-l", type=int,
-            help="Maximum AMR Level read in plotfile")
+            help="Maximum AMR Level to keep in the filtered plotfile")
     parser.add_argument(
-            "--num_cpus", "-np", type=int,
-            help="Number of subprocesses to use")
+            "--serial", "-s", action='store_true',
+            help="Flag to disable multiprocessing")
     parser.add_argument(
             "--output", "-o", type=str,
-            help="Output path to store the post processing")
+            help="Output path to store the filtered plotfile")
 
     args = parser.parse_args()
-
-    if args.mech is not None:
-        os.environ["CANTERA_MECH"] = args.mech
-
-    from mandoline import HeaderData, parallel_cook, parallel_cook_byarray
-    from mandoline.colander import Colander
-
-    # what are we cooking
-    recipe = Colander(args.recipe)
-    recipe.__doc__ = args.recipe
+    """
+    Input arguments sanity check
+    """
+    if args.plotfile is None:
+        raise ValueError("Must specify a plotfile to filter")
+    if len(args.variables) == 0:
+        raise ValueError("Must keep at least one field")
+    if args.output is None:
+        raise ValueError("Must specify output path")
 
     # Header data
     hdr = HeaderData(args.plotfile, limit_level=args.limit_level)

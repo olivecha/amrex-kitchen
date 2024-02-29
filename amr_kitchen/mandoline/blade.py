@@ -1,5 +1,5 @@
 import numpy as np
-from mandoline.utils import expand_array
+from .utils import expand_array
 
 
 def slice_box(args):

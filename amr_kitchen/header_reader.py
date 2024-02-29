@@ -95,9 +95,9 @@ class HeaderData(object):
         """
         Read the cell header data for a given level
         """
-        cells = {}
+        cells = []
         for i in range(self.limit_level + 1):
-            cells[f"Lv_{i}"] = {}
+            lvcells = {}
             cfile_path = os.path.join(self.pfile, self.cell_paths[i] + "_H")
             with open(cfile_path) as cfile:
                 # Skip 2 lines
@@ -113,7 +113,7 @@ class HeaderData(object):
                     start = np.array(start.replace('(', '').replace(')', '').split(','), dtype=int)
                     stop = np.array(stop.replace('(', '').replace(')', '').split(','), dtype=int)
                     indexes.append([start, stop])
-                cells[f"Lv_{i}"]["indexes"] = indexes
+                lvcells["indexes"] = indexes
                 cfile.readline()
                 assert n_cells == int(cfile.readline())
                 files = []
@@ -122,8 +122,9 @@ class HeaderData(object):
                     _, file, offset = cfile.readline().split()
                     files.append(os.path.join(self.pfile, self.cell_paths[i].replace('Cell', ''), file))
                     offsets.append(int(offset))
-                cells[f"Lv_{i}"]["files"] = files
-                cells[f"Lv_{i}"]["offsets"] = offsets
+            lvcells["files"] = files
+            lvcells["offsets"] = offsets
+            cells.append(lvcells)
         return cells
 
 

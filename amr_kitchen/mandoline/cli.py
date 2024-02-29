@@ -9,10 +9,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
-from mandoline import HeaderData
-from mandoline.utils import sanitize_field_name, plotfile_ndims
-from mandoline.data_reader import slice_box, plate_box
-from mandoline.slice_data import SliceData
+from amr_kitchen import HeaderData
+from .utils import sanitize_field_name, plotfile_ndims
+from .blade import slice_box, plate_box
+from .slice import Slice
 
 
 coords_dict = {0:'x',
@@ -102,11 +102,11 @@ def main():
     # And also stores and define the slice data
     # With default values to pass it to the 
     # Box reader multiprocessing function
-    slc = SliceData(args.plotfile, 
-                    fields=args.variables, 
-                    normal=args.normal, 
-                    pos=args.position,
-                    limit_level=args.max_level)
+    slc = Slice(args.plotfile, 
+                fields=args.variables, 
+                normal=args.normal, 
+                pos=args.position,
+                limit_level=args.max_level)
 
     # Timing info
     header_time = time.time() - header_start
@@ -156,9 +156,9 @@ def main():
             plane_data[Lv] = []
             # Multiprocessing inputs
             pool_inputs = []
-            for indexes, cfile, offset, box in zip(slc.cells[f"Lv_{Lv}"]['indexes'],
-                                                   slc.cells[f"Lv_{Lv}"]['files'],
-                                                   slc.cells[f"Lv_{Lv}"]['offsets'],
+            for indexes, cfile, offset, box in zip(slc.cells[Lv]['indexes'],
+                                                   slc.cells[Lv]['files'],
+                                                   slc.cells[Lv]['offsets'],
                                                    slc.boxes[Lv]):
                 # Everything needed by the slice reader
                 p_in  = {'cx':slc.cx,
@@ -211,7 +211,6 @@ def main():
         for i, data in enumerate(all_data):
             all_data[i] = data.T
         
-
         """
         Case for 3D plotfiles (mandoline time)
         """
@@ -250,9 +249,9 @@ def main():
                              'fidxs':slc.fidxs,
                              'Lv':Lv,
                              'bidx':idx,
-                             'indexes':slc.cells[f'Lv_{Lv}']['indexes'][idx],
-                             'cfile':slc.cells[f'Lv_{Lv}']['files'][idx],
-                             'offset':slc.cells[f'Lv_{Lv}']['offsets'][idx],
+                             'indexes':slc.cells[Lv]['indexes'][idx],
+                             'cfile':slc.cells[Lv]['files'][idx],
+                             'offset':slc.cells[Lv]['offsets'][idx],
                              'box':box}
                     pool_inputs.append(p_in) # Add to inputs
 
