@@ -195,8 +195,11 @@ class Colander(HeaderData):
             # Upper bounds
             hfile.write(' '.join([str(f) for f in self.geo_high]) + '\n')
             # Refinement factors
-            factors = self.factors[:self.limit_level + 1]
-            hfile.write(' '.join([str(f) for f in factors]) + '\n')
+            if self.limit_level > 0:
+                factors = self.factors[:self.limit_level + 1]
+                hfile.write(' '.join([str(f) for f in factors]) + '\n')
+            else:
+                hfile.write('\n')
             # Grid sizes
             # Looks like ((0,0,0) (7,7,7) (0,0,0))
             tuples = []
