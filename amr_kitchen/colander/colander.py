@@ -80,10 +80,13 @@ class Colander(HeaderData):
 
             # Multiprocessing args list
             mp_calls = []
+            box_index_map = []
             # On process per binary file
             for bfile_r in np.unique(level_files):
                 # Indexes of cells in the binary file
                 bf_indexes = box_indexes[level_files == bfile_r]
+                # Store the index of the boxes with the current file
+                box_index_map.append(bf_indexes)
                 # Path to the new binary file
                 bfile_w = os.path.join(self.outdir,
                                        self.cell_paths[lv].split('/')[0],
@@ -104,9 +107,13 @@ class Colander(HeaderData):
             # Strain in parallel
             with multiprocessing.Pool() as pool:
                 new_offsets = pool.map(parallel_strain, mp_calls)
+            # Reorder the offsets to match the box order
+            mapped_offsets = np.empty(len(self.boxes[lv]), dtype=int)
+            for file_idxs, offsets in zip(box_index_map, new_offsets):
+                mapped_offsets[file_idxs] = offsets
 
             # Rewrite the cell headers
-            self.update_cell_header(lv, cell_header_r, new_offsets)
+            self.update_cell_header(lv, cell_header_r, mapped_offsets)
             # Rewrite the global header
             self.write_strained_global_header()
 
@@ -117,7 +124,6 @@ class Colander(HeaderData):
         """
         cell_header_w = os.path.join(self.outdir, 
                                      self.cell_paths[lv] + "_H")
-        new_offsets = np.hstack(new_offsets)
 
         with open(cell_header_w, 'w') as ch_w, open(cell_header_r, 'r') as ch_r:
             # First two lines
