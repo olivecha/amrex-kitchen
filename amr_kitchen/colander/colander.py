@@ -1,4 +1,5 @@
 import os
+import time
 import multiprocessing
 import numpy as np
 from amr_kitchen import HeaderData
@@ -71,6 +72,7 @@ class Colander(HeaderData):
         self.make_dir_tree(self.outdir)
         # For each level
         for lv in range(self.limit_level + 1):
+            lvstart = time.time()
             level_files = np.array(self.cells[lv]["files"])
             ncells = len(level_files)
             cell_header_r = os.path.join(self.pfile,
@@ -114,8 +116,9 @@ class Colander(HeaderData):
 
             # Rewrite the cell headers
             self.update_cell_header(lv, cell_header_r, mapped_offsets)
-            # Rewrite the global header
-            self.write_strained_global_header()
+            print(f"Strained Level {lv} ({time.time() - lvstart:.2f} s)")
+        # Rewrite the global header
+        self.write_strained_global_header()
 
     
     def update_cell_header(self, lv, cell_header_r, new_offsets):
