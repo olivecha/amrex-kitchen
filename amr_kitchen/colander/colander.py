@@ -23,7 +23,7 @@ def parallel_strain(args):
             # Get the header
             header = bfr.readline().decode('ascii')
             # Replace with number of vars just to be sure
-            header_w = header.replace(f'{args["nvars"]}\n', '{nkept}\n')
+            header_w = header.replace(f'{args["nvars"]}\n', f'{nkept}\n')
             # Write to binary file
             bfw.write(header_w.encode('ascii'))
              # Read the data
