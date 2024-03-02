@@ -4,7 +4,7 @@ import multiprocessing
 import numpy as np
 from amr_kitchen import HeaderData
 
-def parallel_strain(args):
+def parallel_strain_3d(args):
     """
     Cook a single cell binary file
     Multiprocessing function
@@ -39,6 +39,41 @@ def parallel_strain(args):
     return offsets
 
 
+def parallel_strain_2d(args):
+    """
+    Cook a single cell binary file
+    Multiprocessing function
+    """
+    # New offsets
+    offsets = []
+    nkept = len(args["kept_fields"])
+    # Open the read and write
+    with open(args['bfile_r'], 'rb') as bfr, open(args['bfile_w'], 'wb') as bfw:
+        for indexes, fst_r, idx in zip(args['box_indexes'], 
+                                       args['offsets_r'], 
+                                       args['cell_indexes']):
+            # Store pointer position to update header
+            offsets.append(bfw.tell())
+            # Go to the data
+            bfr.seek(fst_r)
+            # Get the header
+            header = bfr.readline().decode('ascii')
+            # Replace with number of vars just to be sure
+            header_w = header.replace(f'{args["nvars"]}\n', f'{nkept}\n')
+            # Write to binary file
+            bfw.write(header_w.encode('ascii'))
+             # Read the data
+            shape = indexes[1] - indexes[0] + 1
+            total_shape = (shape[0], shape[1], args['nvars'])
+            arr = np.fromfile(bfr, "float64", np.prod(total_shape))
+            arr = arr.reshape(total_shape, order="F")
+            # Reshape into dicts
+            arr_out = arr[:, :, args["kept_fields"]]
+            arr_bytes = arr_out.flatten(order="F").tobytes()
+            bfw.write(arr_bytes)
+    return offsets
+
+
 class Colander(HeaderData):
     """
     Class containing the data used to filter the plotfile
@@ -55,6 +90,12 @@ class Colander(HeaderData):
         """
         super().__init__(plotfile,
                          limit_level=limit_level)
+        # Define the strainer function
+        if self.ndims == 2:
+            self.strainer = parallel_strain_2d
+        elif self.ndims == 3:
+            self.strainer = parallel_strain_3d
+        # Store user inputs
         self.outdir = output
         self.kept_fields = []
         self.kept_names = variables
@@ -108,7 +149,7 @@ class Colander(HeaderData):
                 mp_calls.append(mp_call)
             # Strain in parallel
             with multiprocessing.Pool() as pool:
-                new_offsets = pool.map(parallel_strain, mp_calls)
+                new_offsets = pool.map(self.strainer, mp_calls)
             # Reorder the offsets to match the box order
             mapped_offsets = np.empty(len(self.boxes[lv]), dtype=int)
             for file_idxs, offsets in zip(box_index_map, new_offsets):
@@ -133,9 +174,9 @@ class Colander(HeaderData):
             for i in range(2):
                 l = ch_r.readline()
                 ch_w.write(l)
-            # Always one
+            # Number of fields
             _ = ch_r.readline()
-            ch_w.write("1\n")
+            ch_w.write(f"{len(self.kept_fields)}\n")
             # Mesh stays the same
             while True:
                 l = ch_r.readline()
@@ -205,7 +246,10 @@ class Colander(HeaderData):
             tuples = []
             for lv in range(self.limit_level + 1):
                 sizes = ",".join([str(s-1) for s in self.grid_sizes[lv]])
-                tup = f"((0,0,0) ({sizes}) (0,0,0))"
+                if self.ndims == 3:
+                    tup = f"((0,0,0) ({sizes}) (0,0,0))"
+                elif self.ndims == 2:
+                    tup = f"((0,0) ({sizes}) (0,0))"
                 tuples.append(tup)
             hfile.write(' '.join(tuples) + '\n')
             # By level step numbers
@@ -226,9 +270,8 @@ class Colander(HeaderData):
                 hfile.write(f"{self.step_numbers[lv]}\n")
                 # Write the 2D boxes
                 for box in self.boxes[lv]:
-                    hfile.write(f"{box[0][0]} {box[0][1]}\n")
-                    hfile.write(f"{box[1][0]} {box[1][1]}\n")
-                    hfile.write(f"{box[2][0]} {box[2][1]}\n")
+                    for d in range(self.ndims):
+                        hfile.write(f"{box[d][0]} {box[d][1]}\n")
                 # Write the Level path info
                 hfile.write(f"Level_{lv}/Cell\n")
 
