@@ -755,7 +755,7 @@ class Mandoline(HeaderData):
         # Upper bounds
         fobj.write(f"{self.geo_high[self.cx]} {self.geo_high[self.cy]}\n")
         # Refinement factors
-        factors = self.factors[:self.limit_level + 1]
+        factors = self.factors[:self.limit_level]
         fobj.write(' '.join([str(f) for f in factors]) + '\n')
         # Grid sizes
         # Looks like ((0,0,0) (7,7,7) (0,0,0))
