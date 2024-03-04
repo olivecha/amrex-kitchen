@@ -11,14 +11,9 @@ import matplotlib
 matplotlib.use('Agg')
 from amr_kitchen import HeaderData
 from .utils import sanitize_field_name, plotfile_ndims
-from .blade import slice_box, plate_box
-from .slice import Slice
+#from .blade import slice_box, plate_box
+from .mandoline import Mandoline
 
-
-coords_dict = {0:'x',
-               1:'y',
-               2:'z',
-               '2D':''}
 
 def main():
     """
@@ -80,338 +75,27 @@ def main():
     
     args = parser.parse_args()
 
-    """
-    Define default arguments
-    """
-
-    # Default verbosity
-    if args.verbose is None:
-        verbose = 1
-    else:
-        verbose = args.verbose
-
-    """
-    Read the header files and define field and coords
-    """
-    # Header timer 
-    header_start = time.time()
-
     # Class to handle slice parameters
     # Define the data needed for the slice
     # This reads the plotfile and cell headers
     # And also stores and define the slice data
-    # With default values to pass it to the 
-    # Box reader multiprocessing function
-    slc = Slice(args.plotfile, 
-                fields=args.variables, 
-                normal=args.normal, 
-                pos=args.position,
-                limit_level=args.max_level)
+    # With default values
+    mand = Mandoline(args.plotfile, 
+                     fields=args.variables, 
+                     limit_level=args.max_level,
+                     serial=args.serial,
+                     verbose=args.verbose)
 
-    # Timing info
-    header_time = time.time() - header_start
-    if verbose > 0:
-        print("Time to read header files:",
-              np.around(time.time() - header_start, 2))
-        if args.serial:
-            pass
-        elif header_time < 0.1:
-            print("This plotfile seems small you may consider "
-                  "reading it in serial")
-        else:
-            pass
+    # Do one slice
+    mand.slice(normal=args.normal, 
+               pos=args.position, 
+               outfile=args.output, 
+               fformat=args.format,
+               uselog=args.log,
+               cmap=args.colormap,
+               vmin=args.minimum,
+               vmax=args.maximum)
 
-    # Default output file
-    if args.output is None:
-        outbase = args.plotfile.split('/')[-1]
-        if slc.ndims == 3:
-            outfile_root = f"{coords_dict[slc.cn]}_{outbase}"
-        else:
-            outfile_root = f"2D_{outbase}"
-    else:
-        outfile_root = args.output
-
-    # Define the workers pool if needed
-    if args.serial:
-        pass
-    else:
-        pool = multiprocessing.Pool()
-
-    """
-    Case for 2D plotfiles (no slicing required)
-    """
-    if slc.ndims == 2:
-        #TODO: Use colander to remove fields from 2D plotfiles
-        if args.format == "plotfile":
-            raise NotImplementedError("TODO (you can use amrex-kitchen/"
-                                      "colander")
-        # The slice is just the header data
-        # Object to store the slices
-        plane_data = {}
-        # For a given level
-        for Lv in range(slc.limit_level + 1):
-            # Box reading timer
-            read_start = time.time()
-            # Divide by level so we can stack later
-            plane_data[Lv] = []
-            # Multiprocessing inputs
-            pool_inputs = []
-            for indexes, cfile, offset, box in zip(slc.cells[Lv]['indexes'],
-                                                   slc.cells[Lv]['files'],
-                                                   slc.cells[Lv]['offsets'],
-                                                   slc.boxes[Lv]):
-                # Everything needed by the slice reader
-                p_in  = {'cx':slc.cx,
-                         'cy':slc.cy,
-                         'dx':slc.dx,
-                         'limit_level':slc.limit_level,
-                         'fidxs':slc.fidxs,
-                         'Lv':Lv,
-                         'indexes':indexes,
-                         'cfile':cfile,
-                         'offset':offset,
-                         'box':box}
-                pool_inputs.append(p_in) # Add to inputs
-            # Read the data in parallel
-            if args.serial:
-                plane_data[Lv] = list(map(plate_box, pool_inputs))
-            else:
-                plane_data[Lv] = pool.map(plate_box, pool_inputs)
-
-            if verbose > 0:
-                print(f"Time to read Lv {Lv}:", 
-                      np.around(time.time() - read_start, 2))
-
-        # Broadcast the data to empty arrays
-        all_data = [slc.limit_level_arr() for _ in range(slc.nfidxs)]
-
-        if slc.do_grid_level:
-            grid_level = slc.limit_level_arr()
-        else:
-            grid_level = None
-
-        # Parse the multiprocessing output
-        # Do levels sequentially to update with finer data
-        for Lv in plane_data:
-            for out in plane_data[Lv]:
-                # Add the slices if they are defined
-                xa, xo = out['sx']  # x slice
-                ya, yo = out['sy']  # y slice
-                # add the field data
-                for i in range(slc.nfidxs):
-                    all_data[i][xa:xo, ya:yo] = out['data'][i]
-                # add the normal coordinate
-                # broadcast the grid level to the grid if needed
-                if slc.do_grid_level:
-                    grid_level[xa:xo, ya:yo] = out['level']
-
-        if slc.do_grid_level:
-            all_data.append(grid_level)
-
-        for i, data in enumerate(all_data):
-            all_data[i] = data.T
-        
-        """
-        Case for 3D plotfiles (mandoline time)
-        """
-    elif slc.ndims == 3:
-        # Object to store the slices
-        plane_data = {}
-        # For a given level
-        for Lv in range(slc.limit_level + 1):
-            # Box reading timer
-            read_start = time.time()
-            # Divide by level so we can stack later
-            plane_data[Lv] = []
-            # Multiprocessing inputs
-            pool_inputs = []
-            # For each box in that level
-            for idx, box in enumerate(slc.boxes[Lv]):
-                # Check if the box intersect the slicing plane
-                if (box[slc.cn][0] <= slc.pos and 
-                    box[slc.cn][1] >= slc.pos):
-                    # ----
-                    # Here, intersecting boxes at each level
-                    # Are added to the slice, even if there are
-                    # Higher level boxes covering the lower level
-                    # Box region in the plane. This is a little
-                    # wastefull as more data is readed than needed
-                    # to create the plane, but finding if the box is
-                    # Completely covered is a nightmare (and slower).
-                    # -----
-                    # Everything needed by the slice reader
-                    p_in  = {'cx':slc.cx,
-                             'cy':slc.cy,
-                             'cn':slc.cn,
-                             'dx':slc.dx,
-                             'pos':slc.pos,
-                             'limit_level':slc.limit_level,
-                             'fidxs':slc.fidxs,
-                             'Lv':Lv,
-                             'bidx':idx,
-                             'indexes':slc.cells[Lv]['indexes'][idx],
-                             'cfile':slc.cells[Lv]['files'][idx],
-                             'offset':slc.cells[Lv]['offsets'][idx],
-                             'box':box}
-                    pool_inputs.append(p_in) # Add to inputs
-
-            # Read the data in parallel (or serial)
-            # The box reader returns the slice at both sides of the slicing
-            # Plane if available (i.e. not a boundary, or between boxes). 
-            # This allows handling the case when the slice is between boxes
-            # This function interpolate between the two planes and returns
-            if args.serial:
-                plane_data[Lv] = list(map(slice_box, pool_inputs))
-            else:
-                plane_data[Lv] = pool.map(slice_box, pool_inputs)
-
-            if verbose > 0:
-                print(f"Time to read Lv {Lv}:", 
-                      np.around(time.time() - read_start, 2))
-        """
-        Stacking and Interpolation
-        """
-        # Interpolation timer
-        interp_start = time.time()
-        # Process the sliced box to create uniform grids
-        if (args.format == "array" or
-            args.format == "image"):
-            all_data = slc.reducemp_data_ortho(plane_data)
-
-        # For plotfiles we keep the data needed to reconstruct the multilevel grid
-        elif args.format == "plotfile":
-            all_data_bylevel, indexes, headers  = slc.interpolate_bylevel(plane_data)
-
-        if verbose > 0:
-            print("Interpolation time:", 
-                  np.around(time.time() - interp_start, 2), "s")
-    else:
-        raise ValueError(f"Number of dimensions {ndims} not supported")
-
-    """
-    Output the slice
-    """
-    output_start = time.time()
-
-    # Define the saved fields
-    all_names = [name for name in slc.fields]
-    field_names = [all_names[idx] for idx in slc.fidxs if idx is not None]
-    
-    if args.format == "plotfile":
-        # Define the plotfile name
-        if len(field_names) == 1:
-            fname = sanitize_field_name(field_names[0])
-            outfile = '_'.join([outfile_root, fname])
-        else:
-            outfile = outfile_root
-        # Remove if exists ?
-        if outfile in os.listdir():
-            shutil.rmtree(outfile)
-        # Create the plotfile dir
-        os.mkdir(outfile)
-        # Rewrite the header
-        with open(os.path.join(outfile, "Header"), "w") as hfile:
-            slc.write_2d_slice_global_header(hfile,
-                                             field_names,
-                                             indexes)
-        # Write the level data
-        # TODO: could be done with multiprocessing
-        for lv in range(slc.limit_level + 1):
-            slc.write_cell_data_at_level(outfile,
-                                         lv,
-                                         all_data_bylevel[lv],
-                                         indexes[lv])
-        print("Time to save AMReX plotfile: ", 
-              np.around(time.time() - output_start, 2))
-
-
-    # Array output
-    elif args.format == "array":
-        # Make a dict with output
-        x_grid, y_grid = slc.slice_plane_coordinates()
-        output = {'x': x_grid,
-                  'y': y_grid,}
-        # Store in output
-        for i, name in enumerate(field_names):
-            output[name] = all_data[i]
-
-        # Works if only grid_level
-        if slc.do_grid_level:
-            output['grid_level'] = all_data[-1]
-
-        # Add info to output if single field
-        if len(args.variables) == 1:
-            fname = sanitize_field_name(args.variables[0])
-            outfile = '_'.join([fname, outfile_root])
-        else:
-            outfile = outfile_root
-        # Save with numpy so we can np.load
-        np_file = outfile + ".npz"
-        np.savez_compressed(np_file, **output)
-
-        if verbose > 0:
-            print("Time to save uniform grid:", 
-                  np.around(time.time() - output_start, 2), "s")
-
-    # Image output
-    elif args.format == "image":
-        # Compute grids
-        x_grid, y_grid = slc.slice_plane_coordinates()
-        # Use log scale ?
-        if args.log:
-            norm = matplotlib.colors.LogNorm()
-        else:
-            norm = None
-
-        # User supplied colormap
-        if args.colormap in plt.colormaps():
-            cmap = args.colormap
-        else:
-            cmap = 'jet'
-
-        # Plots are the same with grid level
-        if slc.do_grid_level:
-            field_names.append('grid_level')
-        # A figure per field
-        for i, name in enumerate(field_names):
-
-            if verbose > 1:
-                plot_start = time.time()
-                print(f"Plotting {name}...")
-            # Pretty large figure
-            fig = plt.figure(figsize=(8, 6))
-
-            # Plot the slice
-            plt.pcolormesh(x_grid,
-                           y_grid,
-                           all_data[i],
-                           vmin=args.minimum,
-                           vmax=args.maximum,
-                           norm=norm,
-                           cmap=cmap)
-
-            # Add a colorbar  
-            plt.colorbar(label=f'{name}')
-            ax = plt.gca()
-            ax.set_aspect('equal')
-            ax.set_xlabel(f"{coords_dict[slc.cx]} [m]")
-            ax.set_ylabel(f"{coords_dict[slc.cy]} [m]")
-
-            if verbose > 1:
-                print(f"Done! ({np.around(time.time() - plot_start, 2)} s)")
-
-            if verbose > 1:
-                save_start = time.time()
-                print(f"Saving {name} plot...")
-            
-            # save and close
-            outfile = '_'.join([outfile_root, sanitize_field_name(name)])
-            fig.savefig(outfile, dpi=500)
-            plt.close(fig)
-
-            if verbose > 1:
-                print(f"Done! ({np.around(time.time() - save_start, 2)} s)")
-        
 
 if __name__ == "__main__":
     main()

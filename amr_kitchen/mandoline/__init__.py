@@ -1,1 +1,1 @@
-from .slice import Slice
+from .mandoline import Mandoline
