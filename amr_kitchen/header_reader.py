@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 class HeaderData(object):
 
-    def __init__(self, plotfile, limit_level=None):
+    def __init__(self, plotfile, limit_level=None, header_only=False):
         """
         Parse the header data and save as attributes
         """
@@ -47,9 +47,11 @@ class HeaderData(object):
             else:
                 self.limit_level=limit_level
             # Read the box geometry
+            #if not header_only:
             self.box_centers, self.boxes = self.read_boxes(hfile)
         # Read the cell data
-        self.cells = self.read_cell_headers()
+        if not header_only:
+            self.cells = self.read_cell_headers()
             
     def read_boxes(self, hfile):
         """
@@ -151,3 +153,19 @@ class HeaderData(object):
             #shutil.copy(os.path.join(self.pfile, pth + '_H'),
             #            os.path.join(outpath, level_dir))
             
+    def bybinfile(self, lv):
+        """
+        Iterate over header data at lv 
+        by individual binary files
+        """
+        bfiles = np.array(self.cells[lv]['files'])
+        indexes = np.array(self.cells[lv]['indexes'])
+        offsets = np.array(self.cells[lv]['offsets'])
+
+        box_indexes = np.arange(len(bfiles))
+        for bf in np.unique(bfiles):
+            bf_indexes = box_indexes[bfiles == bf]
+            yield (bf, 
+                   offsets[bf_indexes], 
+                   indexes[bf_indexes],)
+
