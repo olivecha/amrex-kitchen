@@ -52,7 +52,33 @@ class HeaderData(object):
         # Read the cell data
         if not header_only:
             self.cells = self.read_cell_headers()
-            
+
+    def __eq__(self, other):
+        """
+        Overload the '==' operator to use it to test for plotfile
+        compatibility. This tests that both plotfiles have the same
+        mesh refinement structure but allows different number of fields
+        and different binary file distribution
+        Example:
+        hdr1 = HeaderData(plt1000)
+        hdr2 = HeaderData(plt2000)
+        hdr1 == hdr2 is True if both plotfiles have the same boxes at
+        each AMR level
+        """
+        # Fail if the maximum AMR level is different
+        if self.limit_level != other.limit_level:
+            return False
+        # Compare boxes
+        for lv in range(self.limit_level + 1):
+            if not np.allclose(self.boxes[lv], other.boxes[lv]):
+                return False
+        # Compare cell indexes
+        for lv in range(self.limit_level + 1):
+            if not np.allclose(self.cells[lv]['indexes'],
+                               other.cells[lv]['indexes']):
+                return False
+        return True
+
     def read_boxes(self, hfile):
         """
         Read the AMR boxes geometry in the base header file
@@ -139,7 +165,7 @@ class HeaderData(object):
                              Available fields in {self.pfile.split('/')[-1]} are:
                              {', '.join(self.fields.keys())} and grid_level""")
 
-    
+
     def make_dir_tree(self, outpath, limit_level=None):
         """
         Re-Create the tree structure of the plotfile in :outpath:
@@ -152,10 +178,10 @@ class HeaderData(object):
             os.makedirs(os.path.join(outpath, level_dir), exist_ok=True)
             #shutil.copy(os.path.join(self.pfile, pth + '_H'),
             #            os.path.join(outpath, level_dir))
-            
+
     def bybinfile(self, lv):
         """
-        Iterate over header data at lv 
+        Iterate over header data at lv
         by individual binary files
         """
         bfiles = np.array(self.cells[lv]['files'])
@@ -165,7 +191,7 @@ class HeaderData(object):
         box_indexes = np.arange(len(bfiles))
         for bf in np.unique(bfiles):
             bf_indexes = box_indexes[bfiles == bf]
-            yield (bf, 
-                   offsets[bf_indexes], 
+            yield (bf,
+                   offsets[bf_indexes],
                    indexes[bf_indexes],)
 
