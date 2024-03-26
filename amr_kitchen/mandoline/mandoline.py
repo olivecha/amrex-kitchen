@@ -80,9 +80,6 @@ class Mandoline(HeaderData):
         if fformat is None:
             fformat = "image"
 
-        if not self.serial:
-            pool = multiprocessing.Pool()
-
         # Object to store the slices
         plane_data = []
         # For a given level
@@ -99,7 +96,8 @@ class Mandoline(HeaderData):
             if self.serial:
                 plane_data.append(list(map(slice_box, pool_inputs)))
             else:
-                plane_data.append(pool.map(slice_box, pool_inputs))
+                with multiprocessing.Pool() as pool:
+                    plane_data.append(pool.map(slice_box, pool_inputs))
 
             if self.v > 0:
                 print(f"Time to read Lv {Lv}:", 
@@ -149,11 +147,28 @@ class Mandoline(HeaderData):
                                               lv,
                                               all_data_bylevel[lv],
                                               indexes[lv])
-            if self.v > 1:
+            if self.v > 0:
                 print("Time to save AMReX plotfile: ", 
                       np.around(time.time() - output_start, 2))
 
-    def plate(self, outfile=None, fformat=None):
+    def thick_slice(self, normal=None, pos=None, 
+                    outfile=None, thickness=None):
+        """
+        Non interpolated thick slices saved as AMReX plotfiles
+        """
+        # Alterate the position to contain uniform points
+        # At the lowest level in the given thickness
+        # Define the lowest Level grid in the normal
+        # direction:
+        self.cn, self.cx, self.cy, self.pos = self.define_slicing_coordinates(normal, pos)
+        geo_lo = self.geo_low[self.cn] + self.dx[0][self.cn]
+        geo_hi = self.geo_high[self.cn] - self.dx[0][self.cn]
+        ngrid = np.arange(geo_lo, geo_hi, 
+                          self.grid_sizes[0][self.cn])
+        print(ngrid)
+
+
+    def plate(self, outfile=None, fformat=None, **pltkwargs):
         """
         Alternate function to "slice" 2D plotfiles
         This is a conversion to uniform covering grid
@@ -231,6 +246,10 @@ class Mandoline(HeaderData):
             np.savez_compressed(outfile, **output)
             return
 
+        elif fformat == "image":
+            self.plot_slice(all_data, outfile, **pltkwargs)
+
+
     def infer_figure_size(self):
         """
         Determine a good figure size given 
@@ -278,11 +297,15 @@ class Mandoline(HeaderData):
         plot_names = [f for f in pltdata if f not in ['x', 'y']]
         for name in plot_names:
 
-            if self.v > 1:
+            if self.v > 0:
                 plot_start = time.time()
-                print(f"Plotting {name}...")
+                print(f"Plotting {name} with vmax = {vmax}")
             # Pretty large figure
             fig = plt.figure(figsize=figsize)
+
+            # Set face color to colormap minimum so masked
+            # Values look good
+            plt.gca().set_facecolor(plt.cm.get_cmap(cmap)(0)) 
 
             # Plot the slice
             plt.pcolormesh(pltdata['x'],
@@ -300,10 +323,10 @@ class Mandoline(HeaderData):
             ax.set_xlabel(f"{self.coordnames[self.cx]} [m]")
             ax.set_ylabel(f"{self.coordnames[self.cy]} [m]")
 
-            if self.v > 1:
+            if self.v > 0:
                 print(f"Done! ({np.around(time.time() - plot_start, 2)} s)")
 
-            if self.v > 1:
+            if self.v > 0:
                 save_start = time.time()
                 print(f"Saving {name} plot...")
             
@@ -313,7 +336,7 @@ class Mandoline(HeaderData):
             fig.savefig(outfile, dpi=500)
             plt.close(fig)
 
-            if self.v > 1:
+            if self.v > 0:
                 print(f"Done! ({np.around(time.time() - save_start, 2)} s)")
 
 
