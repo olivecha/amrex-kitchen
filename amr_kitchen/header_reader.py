@@ -195,3 +195,32 @@ class HeaderData(object):
                    offsets[bf_indexes],
                    indexes[bf_indexes],)
 
+    def boxesfromindexes(self, indexes):
+		"""
+		Give a list if indexes with shape n_levels x [n_indexes_at_level]
+		Compute the corresponding bounding boxes using the header data
+		"""
+		all_boxes = []
+		for lv in range(self.limit_level + 1):
+			lv_boxes = []
+			xgrid = np.linspace(self.geo_low[0] + self.dx[lv][0]/2, 
+								self.geo_high[0] - self.dx[lv][0]/2,
+								self.grid_sizes[lv][0])
+			ygrid = np.linspace(self.geo_low[0] + self.dx[lv][0]/2, 
+								self.geo_high[0] - self.dx[lv][0]/2,
+								self.grid_sizes[lv][0])
+			zgrid = np.linspace(self.geo_low[0] + self.dx[lv][0]/2, 
+								self.geo_high[0] - self.dx[lv][0]/2,
+								self.grid_sizes[lv][0])
+			hdx = self.dx[lv][0]/2
+			hdy = self.dx[lv][1]/2
+			hdz = self.dx[lv][2]/2
+			for idx in indexes[lv]:
+				box_x = [xgrid[idx[0][0]] - hdx, xgrid[idx[1][0]] + hdx]
+				box_y = [ygrid[idx[0][1]] - hdy, ygrid[idx[1][1]] + hdy]
+				box_z = [zgrid[idx[0][2]] - hdz, zgrid[idx[1][2]] + hdz]
+				box = [box_x, box_y, box_z]
+				lv_boxes.append(box)
+			all_boxes.append(lv_boxes)
+		return all_boxes
+
