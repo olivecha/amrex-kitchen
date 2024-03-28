@@ -196,31 +196,94 @@ class HeaderData(object):
                    indexes[bf_indexes],)
 
     def boxesfromindexes(self, indexes):
-		"""
-		Give a list if indexes with shape n_levels x [n_indexes_at_level]
-		Compute the corresponding bounding boxes using the header data
-		"""
-		all_boxes = []
-		for lv in range(self.limit_level + 1):
-			lv_boxes = []
-			xgrid = np.linspace(self.geo_low[0] + self.dx[lv][0]/2, 
-								self.geo_high[0] - self.dx[lv][0]/2,
-								self.grid_sizes[lv][0])
-			ygrid = np.linspace(self.geo_low[0] + self.dx[lv][0]/2, 
-								self.geo_high[0] - self.dx[lv][0]/2,
-								self.grid_sizes[lv][0])
-			zgrid = np.linspace(self.geo_low[0] + self.dx[lv][0]/2, 
-								self.geo_high[0] - self.dx[lv][0]/2,
-								self.grid_sizes[lv][0])
-			hdx = self.dx[lv][0]/2
-			hdy = self.dx[lv][1]/2
-			hdz = self.dx[lv][2]/2
-			for idx in indexes[lv]:
-				box_x = [xgrid[idx[0][0]] - hdx, xgrid[idx[1][0]] + hdx]
-				box_y = [ygrid[idx[0][1]] - hdy, ygrid[idx[1][1]] + hdy]
-				box_z = [zgrid[idx[0][2]] - hdz, zgrid[idx[1][2]] + hdz]
-				box = [box_x, box_y, box_z]
-				lv_boxes.append(box)
-			all_boxes.append(lv_boxes)
-		return all_boxes
+        """
+        Give a list if indexes with shape n_levels x [n_indexes_at_level]
+        Compute the corresponding bounding boxes using the header data
+        """
+        all_boxes = []
+        for lv in range(self.limit_level + 1):
+            lv_boxes = []
+            xgrid = np.linspace(self.geo_low[0] + self.dx[lv][0]/2, 
+                                self.geo_high[0] - self.dx[lv][0]/2,
+                                self.grid_sizes[lv][0])
+            ygrid = np.linspace(self.geo_low[0] + self.dx[lv][0]/2, 
+                                self.geo_high[0] - self.dx[lv][0]/2,
+                                self.grid_sizes[lv][0])
+            zgrid = np.linspace(self.geo_low[0] + self.dx[lv][0]/2, 
+                                self.geo_high[0] - self.dx[lv][0]/2,
+                                self.grid_sizes[lv][0])
+            hdx = self.dx[lv][0]/2
+            hdy = self.dx[lv][1]/2
+            hdz = self.dx[lv][2]/2
+            for idx in indexes[lv]:
+                box_x = [xgrid[idx[0][0]] - hdx, xgrid[idx[1][0]] + hdx]
+                box_y = [ygrid[idx[0][1]] - hdy, ygrid[idx[1][1]] + hdy]
+                box_z = [zgrid[idx[0][2]] - hdz, zgrid[idx[1][2]] + hdz]
+                box = [box_x, box_y, box_z]
+                lv_boxes.append(box)
+            all_boxes.append(lv_boxes)
+        return all_boxes
 
+    def writehdrnewboxes(self, pfdir, boxes, fields):
+        """
+        Write the global header with new boxes
+        """
+        if pfdir not in os.listdir():
+            os.makedirs(pfdir)
+
+        with open(os.path.join(pfdir, 'Header', 'w')) as hfile:
+            # Plotfile version
+            hfile.write(self.version)
+            # Number of fields
+            hfile.write(f"{len(fields)}\n")
+            # Fields
+            for f in fields:
+                hfile.write(f + '\n')
+            # Dimension
+            hfile.write(f"{self.ndims}\n")
+            # Time is unknown
+            hfile.write("0.0\n")
+            # Max level
+            hfile.write(str(self.limit_level) + '\n')
+            # Lower bounds
+            lo_str = " ".join([f"{self.geo_low[i]}" for i in range(self.ndims)])
+            hfile.write(lo_str + '\n')
+            # Upper bounds
+            hi_str =  " ".join([f"{self.geo_high[i]}" for i in range(self.ndims)])
+            hfile.write(hi_str + '\n')
+            # Refinement factors
+            factors = self.factors[:self.limit_level]
+            hfile.write(' '.join([str(f) for f in factors]) + '\n')
+            # Grid sizes
+            # Looks like ((0,0,0) (7,7,7) (0,0,0))
+            tuples = []
+            for lv in range(self.limit_level + 1):
+                start = ','.join(['0' for _ in range(self.ndims)])
+                cente = ','.join([str(self.grid_sizes[lv][i] - 1) for i in range(self.ndims)])
+                end = start
+                tup = f"(({start}) ({cente}) ({end}))"
+                tuples.append(tup)
+            hfile.write(' '.join(tuples) + '\n')
+            # By level step numbers (all zero)
+            step_numbers = [0 for _ in range(self.limit_level + 1)]
+            hfile.write(' '.join([str(n) for n in step_numbers]) + '\n')
+            # Grid resolutions
+            for lv in range(self.limit_level + 1):
+                hfile.write(' '.join([f"{self.dx[lv][i]}" for i in range(self.ndims)]) + '\n')
+            # Coordinate system
+            hfile.write(str(self.sys_coord))
+            # Zero for parsing
+            hfile.write("0\n")
+            # Write the boxes
+            for lv in range(self.limit_level + 1):
+                # Write the level info
+                hfile.write(f"{lv} {len(boxes[lv])} 0.0\n")
+                # Write the level step
+                hfile.write(f"0\n")
+                # Write the 2D boxes
+                for box in boxes[lv]:
+                    box = self.boxes[lv][idx]
+                    for i in range(self.ndims):
+                        hfile.write(f"{box[i][0]} {box[i][1]}\n")
+                # Write the Level path info
+                hfile.write(f"Level_{lv}/Cell\n")
