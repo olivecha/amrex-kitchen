@@ -195,3 +195,21 @@ class HeaderData(object):
                    offsets[bf_indexes],
                    indexes[bf_indexes],)
 
+    def byboxcompared(self, other, lv):
+        """
+        Generator to iterate over the boxes in two plotfiles for
+        a given AMR level: lv
+        """
+        for bf1, bf2,  off1, off2, idxs in zip(self.cells[lv]['files'],
+                                               other.cells[lv]['files'],
+                                               self.cells[lv]['offsets'],
+                                               other.cells[lv]['offsets'],
+                                               self.cells[lv]['indexes']):
+            output = {"indexes":idxs,
+                      "bfile1":bf1,
+                      "bfile2":bf2,
+                      "off1":off1,
+                      "lv":lv,
+                      "off2":off2}
+            yield output
+
