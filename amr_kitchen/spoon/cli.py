@@ -52,6 +52,6 @@ def main():
             elif lvmax > 1:
                 print(f"Max {args.variable} at Level {lv}: {lvmax:.2f}")
             else:
-                print(f"Max {args.variable} at Level {lv}: {lvmax:.2e}")
+                print(f"Max {args.variable} at Level {lv}: {lvmax}")
 
 

@@ -79,9 +79,9 @@ class Colander(HeaderData):
     Class containing the data used to filter the plotfile
     """
 
-    def __init__(self, 
+    def __init__(self,
                  plotfile=None,
-                 limit_level=None, 
+                 limit_level=None,
                  output=None,
                  variables=None):
         """
