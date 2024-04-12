@@ -1,5 +1,7 @@
 # Welcome to the AMReX Kitchen
 
+<img width="450" alt="image" src="https://github.com/olivecha/amrex-kitchen/assets/78630053/f2115bef-887a-4408-8d20-6be15bb0a4a4">
+
 This is a collection of tools to perform post processing and visualization tasks 
 on the AMReX plotfile format. For the moment all tools are written in python
 and make use of the `multiprocessing` module when advantageous to do so. 
