@@ -249,7 +249,7 @@ class HeaderData(object):
         if pfdir not in os.listdir():
             os.makedirs(pfdir)
 
-        with open(os.path.join(pfdir, 'Header', 'w')) as hfile:
+        with open(os.path.join(pfdir, 'Header'), 'w') as hfile:
             # Plotfile version
             hfile.write(self.version)
             # Number of fields
@@ -300,7 +300,6 @@ class HeaderData(object):
                 hfile.write(f"0\n")
                 # Write the 2D boxes
                 for box in boxes[lv]:
-                    box = self.boxes[lv][idx]
                     for i in range(self.ndims):
                         hfile.write(f"{box[i][0]} {box[i][1]}\n")
                 # Write the Level path info
