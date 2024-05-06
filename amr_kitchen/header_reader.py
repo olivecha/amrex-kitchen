@@ -195,6 +195,19 @@ class HeaderData(object):
                    offsets[bf_indexes],
                    indexes[bf_indexes],)
 
+    def bybox(self, lv):
+        """
+        Iterate over header data for evey box
+        """
+        bfiles = np.array(self.cells[lv]['files'])
+        indexes = np.array(self.cells[lv]['indexes'])
+        offsets = np.array(self.cells[lv]['offsets'])
+
+        for bf, idx, off in zip(bfiles, indexes, offsets):
+            yield {"indexes":idx,
+                   "bfile":bf,
+                   "off":off}
+
     def byboxcompared(self, other, lv):
         """
         Generator to iterate over the boxes in two plotfiles for
