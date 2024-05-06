@@ -1,5 +1,7 @@
 # Welcome to the AMReX Kitchen
 
+<img width="450" alt="image" src="https://github.com/olivecha/amrex-kitchen/assets/78630053/f2115bef-887a-4408-8d20-6be15bb0a4a4">
+
 This is a collection of tools to perform post processing and visualization tasks 
 on the AMReX plotfile format. For the moment all tools are written in python
 and make use of the `multiprocessing` module when advantageous to do so. 
@@ -69,6 +71,8 @@ The `-e` flag makes the source files editable so reinstalling after each `git pu
 
 ## mandoline
 
+<img width="350" alt="image" src="https://github.com/olivecha/mandoline/assets/78630053/857636f4-e49d-41d2-b428-6e12b6874157">
+
 Fast slices of (large) AMReX plotfiles. This is equivalent to
 `amrex/Tools/Plotfile/fsnapshot.cpp`, and retains the command line arguments names, 
 but it only loads the data needed for the slice, so large plotfiles can be
@@ -78,7 +82,6 @@ create a uniform grid for the data, and put it in the output format. If the
 `plotfile` format is used with a 2D plotfile the binary files will be rewritten
 with the requested fields in the output file.
 
-<img width="350" alt="image" src="https://github.com/olivecha/mandoline/assets/78630053/857636f4-e49d-41d2-b428-6e12b6874157">
 
 ### Usage
 
@@ -147,6 +150,8 @@ resolution of the highest level is a temporary fix.
 
 
 ## 2. Colander
+
+<img width="300" alt="colander" src="https://github.com/olivecha/amrex-kitchen/assets/78630053/aec452e7-520e-4f2c-bbb2-44c79dd0c6ca">
 
 Strain out variables or levels from plotfiles, see:
 
