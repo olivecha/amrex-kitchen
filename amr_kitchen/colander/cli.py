@@ -39,7 +39,7 @@ def main():
         raise ValueError("Must specify output path")
 
     # Colander object
-    cld = Colander(plotfile=args.plotfile, 
+    cld = Colander(plotfile=args.plotfile,
                    limit_level=args.limit_level,
                    output=args.output,
                    variables=args.variables)

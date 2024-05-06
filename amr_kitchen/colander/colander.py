@@ -99,11 +99,17 @@ class Colander(HeaderData):
         self.outdir = output
         self.kept_fields = []
         self.kept_names = variables
-        for v in variables:
-            try:
-                self.kept_fields.append(self.fields[v])
-            except KeyError:
-                raise ValueError(f"Field {v} not found in file")
+        # Case for keeping all variables
+        if (len(variables) == 1) and (variables[0] == "all"):
+            for f in self.fields:
+                self.kept_fields.append(self.fields[f])
+        # Case for arbitrary number of variables
+        else:
+            for v in variables:
+                try:
+                    self.kept_fields.append(self.fields[v])
+                except KeyError:
+                    raise ValueError(f"Field {v} not found in file")
 
     def strain(self):
         """
