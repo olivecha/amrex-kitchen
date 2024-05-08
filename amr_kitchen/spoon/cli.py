@@ -2,7 +2,7 @@ import os
 import sys
 import argparse
 import numpy as np
-from amr_kitchen import HeaderData
+from amr_kitchen import PlotfileCooker
 
 def main():
     # Argument parser
@@ -21,7 +21,7 @@ def main():
 
     print(f"__ {os.path.split(args.plotfile)[1]} __")
 
-    hdr = HeaderData(args.plotfile, header_only=True)
+    hdr = PlotfileCooker(args.plotfile, header_only=True)
 
     fidx = hdr.fields[args.variable]
 

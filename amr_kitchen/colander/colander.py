@@ -2,7 +2,7 @@ import os
 import time
 import multiprocessing
 import numpy as np
-from amr_kitchen import HeaderData
+from amr_kitchen import PlotfileCooker
 
 def parallel_strain_3d(args):
     """
@@ -74,7 +74,7 @@ def parallel_strain_2d(args):
     return offsets
 
 
-class Colander(HeaderData):
+class Colander(PlotfileCooker):
     """
     Class containing the data used to filter the plotfile
     """
