@@ -123,7 +123,8 @@ class Colander(HeaderData):
             level_files = np.array(self.cells[lv]["files"])
             ncells = len(level_files)
             cell_header_r = os.path.join(self.pfile,
-                                         self.cell_paths[lv] + '_H')
+                                         self.cell_paths[lv], 
+                                         'Cell_H')
             # All indexes of the boxes at lv
             box_indexes = np.arange(ncells)
 
@@ -173,7 +174,8 @@ class Colander(HeaderData):
         Update the new Cell header
         """
         cell_header_w = os.path.join(self.outdir, 
-                                     self.cell_paths[lv] + "_H")
+                                     self.cell_paths[lv],
+                                     "Cell_H")
 
         with open(cell_header_w, 'w') as ch_w, open(cell_header_r, 'r') as ch_r:
             # First two lines

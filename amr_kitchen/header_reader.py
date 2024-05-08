@@ -114,7 +114,8 @@ class HeaderData(object):
                     point.append(lo + (hi - lo)/2)
                 lv_points.append(point)
                 lv_boxes.append(box)
-            self.cell_paths.append(hfile.readline().replace('\n', ''))
+            cell_dir = hfile.readline().split('/')[0]
+            self.cell_paths.append(cell_dir)
             points.append(lv_points)
             boxes.append(lv_boxes)
         return points, boxes
@@ -126,7 +127,7 @@ class HeaderData(object):
         cells = []
         for i in range(self.limit_level + 1):
             lvcells = {}
-            cfile_path = os.path.join(self.pfile, self.cell_paths[i] + "_H")
+            cfile_path = os.path.join(self.pfile, self.cell_paths[i], "Cell_H")
             with open(cfile_path) as cfile:
                 # Skip 2 lines
                 cfile.readline()
@@ -148,7 +149,7 @@ class HeaderData(object):
                 offsets = []
                 for _ in range(n_cells):
                     _, file, offset = cfile.readline().split()
-                    files.append(os.path.join(self.pfile, self.cell_paths[i].replace('Cell', ''), file))
+                    files.append(os.path.join(self.pfile, self.cell_paths[i], file))
                     offsets.append(int(offset))
             lvcells["files"] = files
             lvcells["offsets"] = offsets
