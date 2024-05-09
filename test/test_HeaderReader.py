@@ -23,7 +23,7 @@ class TestSliceData(unittest.TestCase):
             self.assertEqual(hdr.limit_level, Lv)
 
     def test_bybinfile_iterator2d(self):
-        hdr = HeaderData(self.pfile2d)
+        hdr = PlotfileCooker(self.pfile2d)
         for lv in range(hdr.limit_level + 1):
             for bfname, offsets, indexes in hdr.bybinfile(lv):
                 with open(bfname) as bf:
@@ -34,7 +34,7 @@ class TestSliceData(unittest.TestCase):
                         arr = np.fromfile(bf, 'float64', np.prod(shape))
                         
     def test_bybinfile_iterator3d(self):
-        hdr = HeaderData(self.pfile3d)
+        hdr = PlotfileCooker(self.pfile3d)
         for lv in range(hdr.limit_level + 1):
             for bfname, offsets, indexes in hdr.bybinfile(lv):
                 with open(bfname) as bf:
