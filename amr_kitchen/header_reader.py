@@ -175,7 +175,7 @@ class PlotfileCooker(object):
         #shutil.copy(os.path.join(self.pfile, 'Header'),
         #           outpath)
         for pth in self.cell_paths:
-            level_dir = pth.split('/')[0]
+            level_dir = os.path.split(pth)[0]
             os.makedirs(os.path.join(outpath, level_dir), exist_ok=True)
             #shutil.copy(os.path.join(self.pfile, pth + '_H'),
             #            os.path.join(outpath, level_dir))

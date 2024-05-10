@@ -139,7 +139,7 @@ class Colander(PlotfileCooker):
                 box_index_map.append(bf_indexes)
                 # Path to the new binary file
                 bfile_w = os.path.join(self.outdir,
-                                       self.cell_paths[lv].split('/')[0],
+                                       os.path.split(self.cell_paths[lv])[0],
                                        bfile_r.split('/')[-1])
                 # Indexes of the boxes in the global grid
                 box_slices = np.array(self.cells[lv]["indexes"])[bf_indexes]
