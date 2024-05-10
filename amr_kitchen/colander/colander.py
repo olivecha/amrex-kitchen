@@ -13,7 +13,9 @@ def parallel_strain_3d(args):
     offsets = []
     nkept = len(args["kept_fields"])
     # Open the read and write
-    with open(os.path.join(os.getcwd(),args['bfile_r']), 'rb') as bfr, open(os.path.join(os.getcwd(),"temp2d",args['bfile_r'].split("\\")[-2],args['bfile_r'].split("\\")[-1]), 'wb') as bfw:
+    bfile_r = os.path.join(os.getcwd(),args['bfile_r'])
+    bfile_w = os.path.join(os.getcwd(),"temp3d",os.path.basename(os.path.split(args['bfile_r'])[0]),os.path.basename(args['bfile_r']))
+    with open(bfile_r, 'rb') as bfr, open(bfile_w, 'wb') as bfw:
         for indexes, fst_r, idx in zip(args['box_indexes'], 
                                        args['offsets_r'], 
                                        args['cell_indexes']):
@@ -48,7 +50,9 @@ def parallel_strain_2d(args):
     offsets = []
     nkept = len(args["kept_fields"])
     # Open the read and write
-    with open(os.path.join(os.getcwd(),args['bfile_r']), 'rb') as bfr, open(os.path.join(os.getcwd(),"temp2d",args['bfile_r'].split("\\")[-2],args['bfile_r'].split("\\")[-1]), 'wb') as bfw:
+    bfile_r = os.path.join(os.getcwd(),args['bfile_r'])
+    bfile_w = os.path.join(os.getcwd(),"temp2d",os.path.basename(os.path.split(args['bfile_r'])[0]),os.path.basename(args['bfile_r']))
+    with open(bfile_r, 'rb') as bfr, open(bfile_w, 'wb') as bfw:        
         for indexes, fst_r, idx in zip(args['box_indexes'], 
                                        args['offsets_r'], 
                                        args['cell_indexes']):

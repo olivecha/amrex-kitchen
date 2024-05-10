@@ -31,9 +31,9 @@ class TestSlice(unittest.TestCase):
             chdr_new = open(os.path.join(os.getcwd(),"temp2d","Level_0","Cell_H")).read()
             chdr_ref = open(os.path.join(os.getcwd(),self.pfile2d, "Level_0", "Cell_H")).read()
             self.assertEqual(chdr_new, chdr_ref)
-            #shutil.rmtree("temp2d")
+            shutil.rmtree("temp2d")
         except Exception as e:
-            #shutil.rmtree("temp2d")
+            shutil.rmtree("temp2d")
             raise(e)
 
 
