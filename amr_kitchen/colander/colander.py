@@ -13,7 +13,7 @@ def parallel_strain_3d(args):
     offsets = []
     nkept = len(args["kept_fields"])
     # Open the read and write
-    with open(args['bfile_r'], 'rb') as bfr, open(args['bfile_w'], 'wb') as bfw:
+    with open(os.path.join(os.getcwd(),args['bfile_r']), 'rb') as bfr, open(os.path.join(os.getcwd(),"temp2d",args['bfile_r'].split("\\")[-2],args['bfile_r'].split("\\")[-1]), 'wb') as bfw:
         for indexes, fst_r, idx in zip(args['box_indexes'], 
                                        args['offsets_r'], 
                                        args['cell_indexes']):
@@ -48,7 +48,7 @@ def parallel_strain_2d(args):
     offsets = []
     nkept = len(args["kept_fields"])
     # Open the read and write
-    with open(args['bfile_r'], 'rb') as bfr, open(args['bfile_w'], 'wb') as bfw:
+    with open(os.path.join(os.getcwd(),args['bfile_r']), 'rb') as bfr, open(os.path.join(os.getcwd(),"temp2d",args['bfile_r'].split("\\")[-2],args['bfile_r'].split("\\")[-1]), 'wb') as bfw:
         for indexes, fst_r, idx in zip(args['box_indexes'], 
                                        args['offsets_r'], 
                                        args['cell_indexes']):
@@ -140,7 +140,7 @@ class Colander(PlotfileCooker):
                 # Path to the new binary file
                 bfile_w = os.path.join(self.outdir,
                                        os.path.split(self.cell_paths[lv])[0],
-                                       bfile_r.split('/')[-1])
+                                       os.path.split(bfile_r)[-1])
                 # Indexes of the boxes in the global grid
                 box_slices = np.array(self.cells[lv]["indexes"])[bf_indexes]
                 # All offsets in the current binary file
@@ -177,7 +177,7 @@ class Colander(PlotfileCooker):
                                      self.cell_paths[lv],
                                      "Cell_H")
 
-        with open(cell_header_w, 'w') as ch_w, open(cell_header_r, 'r') as ch_r:
+        with open(os.path.join(os.getcwd(),cell_header_w), 'w') as ch_w, open(os.path.join(os.getcwd(),cell_header_r), 'r') as ch_r:
             # First two lines
             for i in range(2):
                 l = ch_r.readline()

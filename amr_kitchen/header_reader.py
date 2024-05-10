@@ -171,12 +171,13 @@ class PlotfileCooker(object):
         """
         Re-Create the tree structure of the plotfile in :outpath:
         """
-        os.makedirs(outpath, exist_ok=True)
+        os.makedirs(os.path.join(os.getcwd(),outpath), exist_ok=True)
         #shutil.copy(os.path.join(self.pfile, 'Header'),
         #           outpath)
         for pth in self.cell_paths:
-            level_dir = os.path.split(pth)[0]
-            os.makedirs(os.path.join(outpath, level_dir), exist_ok=True)
+            level_dir = pth
+            print(os.path.join(os.getcwd(),outpath, level_dir))
+            os.makedirs(os.path.join(os.getcwd(),outpath, level_dir), exist_ok=True)
             #shutil.copy(os.path.join(self.pfile, pth + '_H'),
             #            os.path.join(outpath, level_dir))
 
@@ -261,9 +262,9 @@ class PlotfileCooker(object):
         Write the global header with new boxes
         """
         if pfdir not in os.listdir():
-            os.makedirs(pfdir)
+            os.makedirs(os.getcwd(),pfdir)
 
-        with open(os.path.join(pfdir, 'Header'), 'w') as hfile:
+        with open(os.path.join(os.getcwd(),pfdir, 'Header'), 'w') as hfile:
             # Plotfile version
             hfile.write(self.version)
             # Number of fields
