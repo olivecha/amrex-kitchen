@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-class PlotfileCooker(object):
+class HeaderData(object):
 
     def __init__(self, plotfile, limit_level=None, header_only=False):
         """
@@ -60,8 +60,8 @@ class PlotfileCooker(object):
         mesh refinement structure but allows different number of fields
         and different binary file distribution
         Example:
-        hdr1 = PlotfileCooker(plt1000)
-        hdr2 = PlotfileCooker(plt2000)
+        hdr1 = HeaderData(plt1000)
+        hdr2 = HeaderData(plt2000)
         hdr1 == hdr2 is True if both plotfiles have the same boxes at
         each AMR level
         """

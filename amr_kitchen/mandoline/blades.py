@@ -33,7 +33,7 @@ def slice_box(args):
     pos = args['pos']
     fidxs = args['fidxs']
     limit_level = args['limit_level']
-    # Get the cell data from the PlotfileCooker class
+    # Get the cell data from the HeaderData class
     indexes = args['indexes']
     cfile = args['cfile']
     offset = args['offset']
@@ -195,7 +195,7 @@ def plate_box(args):
     Lv = args['Lv']
     fidxs = args['fidxs']
     limit_level = args['limit_level']
-    # Get the cell data from the PlotfileCooker class
+    # Get the cell data from the HeaderData class
     indexes = args['indexes']
     cfile = args['cfile']
     offset = args['offset']

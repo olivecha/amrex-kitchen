@@ -5,12 +5,12 @@ import shutil
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-from amr_kitchen import PlotfileCooker
+from amr_kitchen import HeaderData
 from .utils import expand_array
 from .blades import slice_box, plate_box
 
 
-class Mandoline(PlotfileCooker):
+class Mandoline(HeaderData):
     """
     Class containing the slicing data to supply to the
     multiprocessing function

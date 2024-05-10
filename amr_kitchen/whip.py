@@ -5,7 +5,7 @@ import multiprocessing
 import numpy as np
 import argparse
 from tqdm import tqdm
-from amr_kitchen import PlotfileCooker
+from amr_kitchen import HeaderData
 
 # Argument parser
 parser = argparse.ArgumentParser(
@@ -22,7 +22,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 # Read the header data
-hdr = PlotfileCooker(args.plotfile)
+hdr = HeaderData(args.plotfile)
 if hdr.ndims < 3:
     raise ValueError("Use mandoline to create 2D covering grids")
 
