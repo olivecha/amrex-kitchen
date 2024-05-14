@@ -14,8 +14,7 @@ def parallel_strain_3d(args):
     nkept = len(args["kept_fields"])
     # Open the read and write
     bfile_r = os.path.join(os.getcwd(),args['bfile_r'])
-    bfile_w = os.path.join(os.getcwd(),"temp3d",os.path.basename(os.path.split(args['bfile_r'])[0]),os.path.basename(args['bfile_r']))
-    with open(bfile_r, 'rb') as bfr, open(bfile_w, 'wb') as bfw:
+    with open(bfile_r, 'rb') as bfr, open(args['bfile_w'], 'wb') as bfw:
         for indexes, fst_r, idx in zip(args['box_indexes'], 
                                        args['offsets_r'], 
                                        args['cell_indexes']):
@@ -51,8 +50,7 @@ def parallel_strain_2d(args):
     nkept = len(args["kept_fields"])
     # Open the read and write
     bfile_r = os.path.join(os.getcwd(),args['bfile_r'])
-    bfile_w = os.path.join(os.getcwd(),"temp2d",os.path.basename(os.path.split(args['bfile_r'])[0]),os.path.basename(args['bfile_r']))
-    with open(bfile_r, 'rb') as bfr, open(bfile_w, 'wb') as bfw:        
+    with open(bfile_r, 'rb') as bfr, open(args['bfile_w'], 'wb') as bfw:        
         for indexes, fst_r, idx in zip(args['box_indexes'], 
                                        args['offsets_r'], 
                                        args['cell_indexes']):
@@ -142,9 +140,9 @@ class Colander(PlotfileCooker):
                 # Store the index of the boxes with the current file
                 box_index_map.append(bf_indexes)
                 # Path to the new binary file
-                bfile_w = os.path.join(self.outdir,
-                                       os.path.split(self.cell_paths[lv])[0],
-                                       os.path.split(bfile_r)[-1])
+                bfile_w = os.path.join(os.getcwd(),self.outdir,
+                                       os.path.basename(os.path.split(bfile_r)[0]),
+                                       os.path.basename(bfile_r))
                 # Indexes of the boxes in the global grid
                 box_slices = np.array(self.cells[lv]["indexes"])[bf_indexes]
                 # All offsets in the current binary file
