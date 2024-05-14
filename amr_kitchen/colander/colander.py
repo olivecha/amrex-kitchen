@@ -13,8 +13,9 @@ def parallel_strain_3d(args):
     offsets = []
     nkept = len(args["kept_fields"])
     # Open the read and write
-    bfile_r = os.path.join(os.getcwd(),args['bfile_r'])
-    with open(bfile_r, 'rb') as bfr, open(args['bfile_w'], 'wb') as bfw:
+    with open(args['bfile_r'], 
+              'rb') as bfr, open(args['bfile_w'], 
+                                 'wb') as bfw:
         for indexes, fst_r, idx in zip(args['box_indexes'], 
                                        args['offsets_r'], 
                                        args['cell_indexes']):
@@ -49,8 +50,9 @@ def parallel_strain_2d(args):
     offsets = []
     nkept = len(args["kept_fields"])
     # Open the read and write
-    bfile_r = os.path.join(os.getcwd(),args['bfile_r'])
-    with open(bfile_r, 'rb') as bfr, open(args['bfile_w'], 'wb') as bfw:        
+    with open(args['bfile_r'], 
+              'rb') as bfr, open(args['bfile_w'], 
+                                 'wb') as bfw:        
         for indexes, fst_r, idx in zip(args['box_indexes'], 
                                        args['offsets_r'], 
                                        args['cell_indexes']):
@@ -139,6 +141,8 @@ class Colander(PlotfileCooker):
                 bf_indexes = box_indexes[level_files == bfile_r]
                 # Store the index of the boxes with the current file
                 box_index_map.append(bf_indexes)
+                # Path to the "old" binary file (for Windows)
+                bfile_r = os.path.join(os.getcwd(), bfile_r)
                 # Path to the new binary file
                 bfile_w = os.path.join(os.getcwd(),self.outdir,
                                        os.path.basename(os.path.split(bfile_r)[0]),
