@@ -64,9 +64,25 @@ class Mandoline(PlotfileCooker):
         self.cy = None
         self.pos = None
 
-    def slice(self, normal=None, pos=None, outfile=None, fformat=None, **pltkwargs):
+    def slice(self, normal=None, pos=None, outfile=None, fformat=None, 
+              **pltkwargs):
         """
-        Slicing function of the mandoline
+        Slicing function of the Mandoline class
+        ____
+        normal: normal coordinate of the slice 1:x, 2:y, 3:z
+        pos: position of the slice in plotfile units (defaults to mid plane)
+        outfile: output file for the slice. If none is supplied one is generated
+                 based on the slice position, direction and included fields
+        fformat: output format of the slice, either image for a .png plot of the
+                 slice, array for saving a 2D array with the field data 
+                 broadcasted to an uniform grid, or plotfile to create a 2D AMReX
+                 plotfile.
+        ----
+        pltkwargs are keyword arguments passed to the plotting function:
+            uselog: (bool) use a log scale for the colormap (defaults to False) 
+            cmap: The matplotlib colormap to use (defaults to jet) 
+            vmin: Minimum value to bound the colormap (defaults to min(data)) 
+            vmax: Maximum value to bound the colormap (defaults to max(data))
         """
         if self.ndims == 2:
             return self.plate(outfile, fformat)
