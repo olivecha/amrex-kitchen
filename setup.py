@@ -2,8 +2,8 @@ import setuptools
 import Cython.Build
 import os
 
-colander = os.path.join(os.getcwd(),"amr_kitchen","colander","colander_cython.pyx")
-mandoline = os.path.join(os.getcwd(),"amr_kitchen","mandoline","mandoline_cython.pyx")
+colander = os.path.join(os.getcwd(),"amr_kitchen","colander","colander.pyx")
+mandoline = os.path.join(os.getcwd(),"amr_kitchen","mandoline","mandoline.pyx")
 
 with open("README.md", "r", encoding="utf-8") as fhand:
     long_description = fhand.read()
