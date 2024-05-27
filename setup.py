@@ -1,4 +1,9 @@
 import setuptools
+import Cython.Build
+import os
+
+colander = os.path.join(os.getcwd(),"amr_kitchen","colander","colander_cython.pyx")
+mandoline = os.path.join(os.getcwd(),"amr_kitchen","mandoline","mandoline_cython.pyx")
 
 with open("README.md", "r", encoding="utf-8") as fhand:
     long_description = fhand.read()
@@ -28,5 +33,10 @@ setuptools.setup(
             "colander = amr_kitchen.colander.cli:main",
             "spoon = amr_kitchen.spoon.cli:main",
         ]
-    }
+    },
+    ext_modules = Cython.Build.cythonize([
+        colander,
+        mandoline
+        ]
+    )
 )
