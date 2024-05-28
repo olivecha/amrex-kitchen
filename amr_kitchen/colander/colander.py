@@ -102,13 +102,15 @@ class Colander(PlotfileCooker):
         # Store user inputs
         self.outdir = output
         self.kept_fields = []
-        self.kept_names = variables
         # Case for keeping all variables
         if (len(variables) == 1) and (variables[0] == "all"):
+            self.kept_names = []
             for f in self.fields:
                 self.kept_fields.append(self.fields[f])
+                self.kept_names.append(f)
         # Case for arbitrary number of variables
         else:
+            self.kept_names = variables
             for v in variables:
                 try:
                     self.kept_fields.append(self.fields[v])
