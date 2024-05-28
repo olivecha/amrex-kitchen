@@ -10,3 +10,5 @@ test/__pycache__
 Backtrace.*
 *__pycache__*
 *.swp
+*.c
+*.so
