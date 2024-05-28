@@ -35,10 +35,10 @@ cook"* which is well suited to the analysis of reacting flows.
 - **chef:** Compute (cook) derived thermochemical quantities (recipes) using Cantera
             `SolutionArrays`. (planned work)
 
-- **HeaderData:** The base python class used by most tools to process the
+- **PlotfileCooker:** The base python class used by most tools to process the
                   plotfile data. Also makes available methods which provide
                   iterators over the data in the plotfile by each AMR level.
-                  (will probably be renamed with a kitchen inspired name)
+                  
 
 ## Installation
 

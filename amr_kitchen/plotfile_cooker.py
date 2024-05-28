@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-class HeaderData(object):
+class PlotfileCooker(object):
 
     def __init__(self, plotfile, limit_level=None, header_only=False):
         """
@@ -60,8 +60,8 @@ class HeaderData(object):
         mesh refinement structure but allows different number of fields
         and different binary file distribution
         Example:
-        hdr1 = HeaderData(plt1000)
-        hdr2 = HeaderData(plt2000)
+        hdr1 = PlotfileCooker(plt1000)
+        hdr2 = PlotfileCooker(plt2000)
         hdr1 == hdr2 is True if both plotfiles have the same boxes at
         each AMR level
         """
@@ -114,7 +114,8 @@ class HeaderData(object):
                     point.append(lo + (hi - lo)/2)
                 lv_points.append(point)
                 lv_boxes.append(box)
-            self.cell_paths.append(hfile.readline().replace('\n', ''))
+            cell_dir = hfile.readline().split('/')[0]
+            self.cell_paths.append(cell_dir)
             points.append(lv_points)
             boxes.append(lv_boxes)
         return points, boxes
@@ -126,7 +127,7 @@ class HeaderData(object):
         cells = []
         for i in range(self.limit_level + 1):
             lvcells = {}
-            cfile_path = os.path.join(self.pfile, self.cell_paths[i] + "_H")
+            cfile_path = os.path.join(self.pfile, self.cell_paths[i], "Cell_H")
             with open(cfile_path) as cfile:
                 # Skip 2 lines
                 cfile.readline()
@@ -148,7 +149,7 @@ class HeaderData(object):
                 offsets = []
                 for _ in range(n_cells):
                     _, file, offset = cfile.readline().split()
-                    files.append(os.path.join(self.pfile, self.cell_paths[i].replace('Cell', ''), file))
+                    files.append(os.path.join(self.pfile, self.cell_paths[i], file))
                     offsets.append(int(offset))
             lvcells["files"] = files
             lvcells["offsets"] = offsets
@@ -170,12 +171,13 @@ class HeaderData(object):
         """
         Re-Create the tree structure of the plotfile in :outpath:
         """
-        os.makedirs(outpath, exist_ok=True)
+        os.makedirs(os.path.join(os.getcwd(),outpath), exist_ok=True)
         #shutil.copy(os.path.join(self.pfile, 'Header'),
         #           outpath)
         for pth in self.cell_paths:
-            level_dir = pth.split('/')[0]
-            os.makedirs(os.path.join(outpath, level_dir), exist_ok=True)
+            level_dir = pth
+            print(os.path.join(os.getcwd(),outpath, level_dir))
+            os.makedirs(os.path.join(os.getcwd(),outpath, level_dir), exist_ok=True)
             #shutil.copy(os.path.join(self.pfile, pth + '_H'),
             #            os.path.join(outpath, level_dir))
 
@@ -260,9 +262,9 @@ class HeaderData(object):
         Write the global header with new boxes
         """
         if pfdir not in os.listdir():
-            os.makedirs(pfdir)
+            os.makedirs(os.getcwd(),pfdir)
 
-        with open(os.path.join(pfdir, 'Header'), 'w') as hfile:
+        with open(os.path.join(os.getcwd(),pfdir, 'Header'), 'w') as hfile:
             # Plotfile version
             hfile.write(self.version)
             # Number of fields

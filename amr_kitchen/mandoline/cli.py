@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
-from amr_kitchen import HeaderData
+from amr_kitchen import PlotfileCooker
 from .utils import sanitize_field_name, plotfile_ndims
 #from .blade import slice_box, plate_box
 from .mandoline import Mandoline

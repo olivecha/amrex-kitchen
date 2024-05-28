@@ -5,8 +5,8 @@ import unittest
 from amr_kitchen.colander import Colander
 
 class TestSlice(unittest.TestCase):
-    pfile2d = "test_assets/example_plt_2d"
-    pfile3d = "test_assets/example_plt_3d"
+    pfile2d = os.path.join("test_assets", "example_plt_2d")
+    pfile3d = os.path.join("test_assets", "example_plt_3d")
 
     def test_backward_compatible_2d(self): 
         """
@@ -28,8 +28,8 @@ class TestSlice(unittest.TestCase):
                            variables=all_variables)
             cld.strain()
 
-            chdr_new = open("temp2d/Level_0/Cell_H").read()
-            chdr_ref = open(os.path.join(self.pfile2d, "Level_0", "Cell_H")).read()
+            chdr_new = open(os.path.join(os.getcwd(),"temp2d","Level_0","Cell_H")).read()
+            chdr_ref = open(os.path.join(os.getcwd(),self.pfile2d, "Level_0", "Cell_H")).read()
             self.assertEqual(chdr_new, chdr_ref)
             shutil.rmtree("temp2d")
         except Exception as e:
