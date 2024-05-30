@@ -13,7 +13,9 @@ def parallel_strain_3d(args):
     offsets = []
     nkept = len(args["kept_fields"])
     # Open the read and write
-    with open(args['bfile_r'], 'rb') as bfr, open(args['bfile_w'], 'wb') as bfw:
+    with open(args['bfile_r'], 
+              'rb') as bfr, open(args['bfile_w'], 
+                                 'wb') as bfw:
         for indexes, fst_r, idx in zip(args['box_indexes'], 
                                        args['offsets_r'], 
                                        args['cell_indexes']):
@@ -48,7 +50,9 @@ def parallel_strain_2d(args):
     offsets = []
     nkept = len(args["kept_fields"])
     # Open the read and write
-    with open(args['bfile_r'], 'rb') as bfr, open(args['bfile_w'], 'wb') as bfw:
+    with open(args['bfile_r'], 
+              'rb') as bfr, open(args['bfile_w'], 
+                                 'wb') as bfw:        
         for indexes, fst_r, idx in zip(args['box_indexes'], 
                                        args['offsets_r'], 
                                        args['cell_indexes']):
@@ -98,13 +102,15 @@ class Colander(PlotfileCooker):
         # Store user inputs
         self.outdir = output
         self.kept_fields = []
-        self.kept_names = variables
         # Case for keeping all variables
         if (len(variables) == 1) and (variables[0] == "all"):
+            self.kept_names = []
             for f in self.fields:
                 self.kept_fields.append(self.fields[f])
+                self.kept_names.append(f)
         # Case for arbitrary number of variables
         else:
+            self.kept_names = variables
             for v in variables:
                 try:
                     self.kept_fields.append(self.fields[v])
@@ -137,10 +143,12 @@ class Colander(PlotfileCooker):
                 bf_indexes = box_indexes[level_files == bfile_r]
                 # Store the index of the boxes with the current file
                 box_index_map.append(bf_indexes)
+                # Path to the "old" binary file (for Windows)
+                bfile_r = os.path.join(os.getcwd(), bfile_r)
                 # Path to the new binary file
-                bfile_w = os.path.join(self.outdir,
-                                       self.cell_paths[lv].split('/')[0],
-                                       bfile_r.split('/')[-1])
+                bfile_w = os.path.join(os.getcwd(),self.outdir,
+                                       os.path.basename(os.path.split(bfile_r)[0]),
+                                       os.path.basename(bfile_r))
                 # Indexes of the boxes in the global grid
                 box_slices = np.array(self.cells[lv]["indexes"])[bf_indexes]
                 # All offsets in the current binary file
@@ -177,7 +185,7 @@ class Colander(PlotfileCooker):
                                      self.cell_paths[lv],
                                      "Cell_H")
 
-        with open(cell_header_w, 'w') as ch_w, open(cell_header_r, 'r') as ch_r:
+        with open(os.path.join(os.getcwd(),cell_header_w), 'w') as ch_w, open(os.path.join(os.getcwd(),cell_header_r), 'r') as ch_r:
             # First two lines
             for i in range(2):
                 l = ch_r.readline()
