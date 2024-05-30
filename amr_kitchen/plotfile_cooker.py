@@ -319,3 +319,40 @@ class PlotfileCooker(object):
                         hfile.write(f"{box[i][0]} {box[i][1]}\n")
                 # Write the Level path info
                 hfile.write(f"Level_{lv}/Cell\n")
+
+    def min_max_header(self):
+        """
+        Returns the mins and maxs values for each level and field
+        """
+        all_maxs = []
+        all_mins = []
+        for lv in range(self.limit_level + 1):
+            print('Min Maxes at Level:', lv)
+            all_maxs.append({})
+            all_mins.append({})
+            with open(os.path.join(self.pfile, "Level_"+str(lv), 'Cell_H')) as cpck:
+                for _ in range(5):
+                    cpck.readline()
+                for _ in range(len(self.boxes[lv])):
+                    cpck.readline()
+                cpck.readline()
+                cpck.readline()
+                for _ in range(len(self.boxes[lv])):
+                    cpck.readline()
+                cpck.readline()
+                cpck.readline()
+                vmins = []
+                for _ in range(len(self.boxes[lv])):
+                    cvmins = cpck.readline().split(',')
+                    vmins.append(np.array(cvmins[:-1], dtype=float))
+                cpck.readline()
+                cpck.readline()
+                vmaxs = []
+                for _ in range(len(self.boxes[lv])):
+                    cvmaxs = cpck.readline().split(',')
+                    vmaxs.append(np.array(cvmaxs[:-1], dtype=float))
+            for f, data in zip(self.fields, np.transpose(vmins)):
+                all_mins[lv][f] = data
+            for f, data in zip(self.fields, np.transpose(vmaxs)):
+                all_maxs[lv][f] = data
+        return all_mins, all_maxs
