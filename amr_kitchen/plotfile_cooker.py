@@ -52,6 +52,8 @@ class PlotfileCooker(object):
         # Read the cell data
         if not header_only:
             self.cells = self.read_cell_headers()
+        # Gets the number fields in the plt_file
+        self.nfields = len(self.fields)
 
     def __eq__(self, other):
         """
@@ -327,7 +329,6 @@ class PlotfileCooker(object):
         all_maxs = []
         all_mins = []
         for lv in range(self.limit_level + 1):
-            print('Min Maxes at Level:', lv)
             all_maxs.append({})
             all_mins.append({})
             with open(os.path.join(self.pfile, "Level_"+str(lv), 'Cell_H')) as cpck:
