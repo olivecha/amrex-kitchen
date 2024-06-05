@@ -284,7 +284,7 @@ class Colander(PlotfileCooker):
                 hfile.write(f"{lv} {len(self.boxes[lv])} {self.time}\n")
                 # Write the level step
                 hfile.write(f"{self.step_numbers[lv]}\n")
-                # Write the 2D boxes
+                # Write the boxes
                 for box in self.boxes[lv]:
                     for d in range(self.ndims):
                         hfile.write(f"{box[d][0]} {box[d][1]}\n")
