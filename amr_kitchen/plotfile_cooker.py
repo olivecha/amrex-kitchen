@@ -171,10 +171,12 @@ class PlotfileCooker(object):
         """
         Re-Create the tree structure of the plotfile in :outpath:
         """
+        if limit_level is None:
+            limit_level = self.limit_level
         os.makedirs(os.path.join(os.getcwd(),outpath), exist_ok=True)
         #shutil.copy(os.path.join(self.pfile, 'Header'),
         #           outpath)
-        for pth in self.cell_paths:
+        for pth in self.cell_paths[:limit_level + 1]:
             level_dir = pth
             print(os.path.join(os.getcwd(),outpath, level_dir))
             os.makedirs(os.path.join(os.getcwd(),outpath, level_dir), exist_ok=True)
@@ -319,3 +321,18 @@ class PlotfileCooker(object):
                         hfile.write(f"{box[i][0]} {box[i][1]}\n")
                 # Write the Level path info
                 hfile.write(f"Level_{lv}/Cell\n")
+
+    def unique_box_shapes(self):
+        """
+        Find the unique box shape tuples
+        for each level
+        """
+        shapes = []
+        for lv in range(self.limit_level + 1):
+            for idx in self.cells[lv]['indexes']:
+                shape = idx[1] - idx[0] + 1
+                shapes.append(tuple(shape))
+        shapes = np.unique(shapes, axis=0)
+        shapes = [tuple(shape) for shape in shapes]
+        return shapes
+
