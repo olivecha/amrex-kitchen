@@ -51,7 +51,7 @@ class PlotfileCooker(object):
             self.box_centers, self.boxes = self.read_boxes(hfile)
         # Read the cell data
         if not header_only:
-            self.cells = self.read_cell_headers()
+            self.cells = self.read_cell_headers()[0]
         # Gets the number fields in the plt_file
         self.nfields = len(self.fields)
 
@@ -124,11 +124,15 @@ class PlotfileCooker(object):
 
     def read_cell_headers(self):
         """
-        Read the cell header data for a given level
+        Read the cell header data and the maxs/mins for a given level
         """
         cells = []
+        all_maxs = []
+        all_mins = []
         for i in range(self.limit_level + 1):
             lvcells = {}
+            all_maxs.append({})
+            all_mins.append({})
             cfile_path = os.path.join(self.pfile, self.cell_paths[i], "Cell_H")
             with open(cfile_path) as cfile:
                 # Skip 2 lines
@@ -153,10 +157,38 @@ class PlotfileCooker(object):
                     _, file, offset = cfile.readline().split()
                     files.append(os.path.join(self.pfile, self.cell_paths[i], file))
                     offsets.append(int(offset))
+                # Let's come back to the beginning of the file 
+                cfile.seek(0)
+                # Let's read the mins and maxs of the level's header
+                for _ in range(5):
+                    cfile.readline()
+                for _ in range(len(self.boxes[i])):
+                    cfile.readline()
+                cfile.readline()
+                cfile.readline()
+                for _ in range(len(self.boxes[i])):
+                    cfile.readline()
+                cfile.readline()
+                cfile.readline()
+                vmins = []
+                for _ in range(len(self.boxes[i])):
+                    cvmins = cfile.readline().split(',')
+                    vmins.append(np.array(cvmins[:-1], dtype=float))
+                cfile.readline()
+                cfile.readline()
+                vmaxs = []
+                for _ in range(len(self.boxes[i])):
+                    cvmaxs = cfile.readline().split(',')
+                    vmaxs.append(np.array(cvmaxs[:-1], dtype=float))
+            for f, data in zip(self.fields, np.transpose(vmins)):
+                all_mins[i][f] = data
+            for f, data in zip(self.fields, np.transpose(vmaxs)):
+                all_maxs[i][f] = data
+
             lvcells["files"] = files
             lvcells["offsets"] = offsets
             cells.append(lvcells)
-        return cells
+        return cells, all_mins, all_maxs
 
 
     def field_index(self, field):
@@ -322,7 +354,7 @@ class PlotfileCooker(object):
                 # Write the Level path info
                 hfile.write(f"Level_{lv}/Cell\n")
 
-    def min_max_header(self):
+    def boxes_min_max(self):
         """
         Returns the mins and maxs values for each level and field
         """
@@ -331,7 +363,7 @@ class PlotfileCooker(object):
         for lv in range(self.limit_level + 1):
             all_maxs.append({})
             all_mins.append({})
-            with open(os.path.join(self.pfile, "Level_"+str(lv), 'Cell_H')) as cpck:
+            with open(os.path.join(self.pfile, self.cell_paths[lv], "Cell_H")) as cpck:
                 for _ in range(5):
                     cpck.readline()
                 for _ in range(len(self.boxes[lv])):
