@@ -21,7 +21,7 @@ def main():
             help="Default to True. Call disables the validation of maxs and mins")
     parser.add_argument(
             "--coordinates", "-c", action='store_false',
-            help="Default to True. Call disables the validation of box coordinates")
+            help="Default to True. Call disables the validation of boxes' coordinates")
     parser.add_argument(
             "--nan", "-n", action='store_false',
             help="Default to True. Call disables the validation of NaNs")

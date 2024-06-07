@@ -94,7 +94,7 @@ class Taster(PlotfileCooker):
 
     def __bool__(self):
         """
-        Overinding the bool method of the class
+        Overiding the bool method of the class
         to return False if the plotfile is Bad
         """
         return self.isgood
@@ -105,19 +105,29 @@ class Taster(PlotfileCooker):
         ___
         Depending on the input arguments more or less 
         attributes of the plotfile are tested.
-        [add list of what is tested]
+        |1 - The number and shape of boxes |
+        |2 - The mins and maxs             |
+        |3 - The boxes' coordinates        |
+        |4 - The NaNs                      |
         """
         # Checking if all box coordinates match
         # The indexes in the level headers
         if self.coordinates:
             self.taste_box_coordinates()
+        if self.boxes_maxmin:
+            self.taste_maxmins_in_binaries()
+        if self.check_nan:
+            self.taste_for_nans_in_binairies()
+        if self.boxes_bounds:
+            self.taste_for_box_shapes_in_binairies()
+        print("\nDone!")
 
     def taste_box_coordinates(self):
         """
         Check that the box coordinates match 
         their indexes
         """
-        print(("Validating the box coordinates match"
+        print(("\nValidating the box coordinates match"
                " the box indexes in the whole plotfile"
                " grid..."))
 
@@ -165,16 +175,83 @@ class Taster(PlotfileCooker):
         Method to test the max mins in the level
         headers match thoses of the binaries
         """
-        # TODO: move code here
-        pass
+        print(("\nValidating that the boxes' maxs and mins match"
+               " the level header's maxs and mins..."))
+        # for each level
+        for lv in range(self.limit_level + 1):
+            print(f"Level {lv} ...")
+            # mins and maxs in the header data 
+            mins_header, maxs_header = [], []
+            _, all_mins_header, all_maxs_header = self.read_cell_headers()
+            for key in all_mins_header[lv]:
+                # Ici tu calcule les valeurs min/maxs entre toutes les boxes
+                # Pour le niveau courant
+                mins_header.append(np.min(all_mins_header[lv][key]))
+                maxs_header.append(np.max(all_maxs_header[lv][key]))
+            
+            min_header, max_header = np.min(mins_header), np.max(maxs_header)
+            all_mins_cells, all_maxs_cells = [], []
+            
+            # For each file 
+            for cells in self.bybinfile(lv):
+                mins_cell, maxs_cell = [], []
+                _, all_mins_box, all_maxs_box = mp_read_binfile_minmax(cells[0])
+
+                for box in all_mins_box:
+                    mins_cell.append(np.min(box))
+                all_mins_cells.append(np.min(mins_cell))
+
+                for box in all_maxs_box:
+                    maxs_cell.append(np.max(box))
+                all_maxs_cells.append(np.max(maxs_cell))
+
+            for m in all_mins_cells:
+                if m < min_header:
+                    error = (f"Level {lv}'s min : {min_header}"
+                                 f" is not absolute because {m} < {min_header}"
+                                 f" at cell {cells[0]}")
+                    self.raise_error(TastesBadError,error)
+                        
+            for m in all_maxs_cells:
+                if m > max_header:
+                    error = (f"Level {lv}'s max : {max_header}"
+                                 f" is not absolute because {m} > {max_header}"
+                                 f" at cell {cells[0]}")
+                    self.raise_error(TastesBadError,error)
+
 
     def taste_for_nans_in_binairies(self):
         """
         Method to test if there are NaNs in 
         the binary files
         """
-        # TODO: move code here
-        pass
+        print(("\nValidating the presence of NaNs in the boxes..."))
+        # for each level
+        for lv in range(self.limit_level + 1):
+            print(f"Level {lv} ...")
+            # For each file  
+            for cells in self.bybinfile(lv):
+                # Let's check if there are any NaN in the boxes
+                with open(cells[0],"rb") as bfile:
+                    # METTRE While True to read all boxes !!
+                    # Ici, on en lit juste une
+                    h = bfile.readline()
+                    tshape = shapes_from_header(h,self.ndims)
+                    arr = np.fromfile(bfile, "float64", np.prod(tshape))
+                    arr = arr.reshape(tshape,order="F")
+                    
+                    # For every field
+                    for i in range(tshape[-1]):
+                        # HOW TO NOT HARDCODE THIS ?
+                        if self.ndims == 2:
+                            array = arr[:, :, i]
+                        elif self.ndims == 3:
+                            array = arr[:, :, :, i]
+                        # Validation
+                        if np.max(array) != np.nanmax(array):
+                            error = (f"There are NaN in level {lv} at cell {cells[0]}")
+                            self.raise_error(TastesBadError,error)
+
 
     def taste_for_box_shapes_in_binairies(self):
         """
@@ -182,8 +259,42 @@ class Taster(PlotfileCooker):
         files has the shape (nx, ny, nz, n_fields)
         for every box
         """
-        # TODO: move code here
-        pass
+        print(("\nValidating the shape and number of boxes..."))
+        # for each level
+        for lv in range(self.limit_level + 1):
+            print(f"Level {lv} ...")
+            # number of cells and fields according to the level header 
+            nbr_cells_header = len(self.cells[lv]['files'])
+            # Same nbr of fields at each level 
+            nbr_fields_header = self.nfields
+
+            nbr_box = 0 
+            # For each file  
+            for cells in self.bybinfile(lv):
+                # Let's add the number of box in each binary file for the level 
+                nbr_box += len(mp_read_binfile_minmax(cells[0])[0])
+
+                # Let's read the binary files
+                with open(cells[0], 'rb') as bfile:
+                    h = bfile.readline()
+                    # Index and shape of indiviual cells
+                    idx, shape = indexes_and_shape_from_header(h)
+                
+                # Shape according to the level header 
+                shape_header = tuple(np.append(((idx[1]-idx[0])+1),nbr_fields_header))
+
+                # Shape Validation
+                if shape != shape_header:
+                    error = (f"The shapes are not the same :"
+                              f"{shape} != {shape_header} at cell {cells[0]}")
+                    self.raise_error(TastesBadError,error)
+                
+            # Number of Cell Validation
+            if nbr_cells_header != nbr_box:
+                error = (f"The number of cells is not the same :"
+                              f"{nbr_cells_header} != {nbr_box} at level {lv}")
+                self.raise_error(TastesBadError,error)
+                
 
     def raise_error(self, error, message):
         """
@@ -199,9 +310,19 @@ class Taster(PlotfileCooker):
             error_name = str(error).split("'")[1]
             print(f"Encountered {error_name}:\n", message)
 
+#bigfile = os.path.join(os.getcwd(),"test_assets","example_plt_3d")
+file = os.path.join(os.getcwd(),"test_assets","example_plt_3d")
+tst = Taster(file)
+
+
+
+
+
+#######################################################################################
+
 #cell = os.path.join(os.getcwd(),"test_assets","example_plt_2d","Level_0","Cell_D_00000")
 #pck = PlotfileCooker(os.path.join("C:\\","Users","franc","Desktop","Stage-POLY-2024","Data","pltlv4temp_Francois"))
-def tasting(plt_file,
+"""def tasting(plt_file,
             boxes=True,
             maxmin=True,
             coordinates=True,
@@ -411,4 +532,4 @@ def tasting(plt_file,
                     if m > max_header:
                         print(f"Level {lv}'s max : {max_header} --> not absolute because {m} > {max_header} at cell {cells[0]}")
         print("Done!")
-
+"""
