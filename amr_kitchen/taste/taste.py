@@ -64,6 +64,127 @@ def shapes_from_header(header,ndim):
     total_shape.append(nfields)
     return total_shape
 
+
+class Taster(PlotfileCooker):
+    """
+    A class to test the validity of AMReX plotfiles
+    """
+    def __init__(self, plt_file, limit_level=None, boxes=True, 
+                 maxmin=True, coordinates=True, nan=True, 
+                 nofail=False):
+        """
+        Constructor for the plotfile tester
+        """
+        # Instantiate the parent class (PlotfileCooker)
+        super().__init__(plt_file, limit_level=limit_level)
+        self.boxes_bounds = boxes
+        self.boxes_maxmin = maxmin
+        self.coordinates = coordinates
+        self.check_nan = nan
+        if nofail:
+            self.fail_on_bad = False
+        else:
+            self.fail_on_bad = True
+
+    def taste(self):
+        """
+        Main functions validating the sanity of the plotfile
+        ___
+        Depending on the input arguments more or less 
+        attributes of the plotfile are tested.
+        [add list of what is tested]
+        """
+        # Checking if all box coordinates match
+        # The indexes in the level headers
+        if self.coordinates:
+            self.taste_box_coordinates()
+
+    def taste_box_coordinates(self):
+        """
+        Check that the box coordinates match 
+        their indexes
+        """
+        print(("Validating the box coordinates match"
+               " the box indexes in the whole plotfile"
+               " grid...")
+
+        # for each level
+        for lv in range(self.limit_level + 1):
+            print(f"Level {lv} ...")
+            # For each dimension
+            # Define the global coordinate grid
+            grids = []
+            for dim in range(self.ndims):
+                dim_grid = np.linspace(self.geo_low[dim] + self.dx[lv][dim]/2,
+                        self.geo_high[dim] - self.dx[lv][dim]/2,
+                        self.grid_sizes[lv][dim])
+                grids.append(dim_grid)
+            # For each box in the domain
+            for i, box in enumerate(self.boxes[lv]):
+                # Get the corresponding indexes
+                idx = self.cells[lv]["indexes"][i]
+                for dim in range(self.ndims):
+                    # Trouver les coordonnées de la box avec les indexes
+                    box_lo = grids[dim][idx[0][dim]] - self.dx[lv][dim]/2
+                    box_hi = grids[dim][idx[1][dim]] + self.dx[lv][dim]/2
+                    # not matching lower bounds
+                    if ~np.isclose(box_lo, box[dim][0]):
+                        # this could be moved to a method
+                        error = (f"The lower bound of box {i} at level {lv}"
+                                 f" ({box[dim][0]} is not equal to the value"
+                                 f" found using the box index {idx[0][dim]} in"
+                                 f" the coordinate grid between {grids[dim][0]}"
+                                 f" and {grids[dim][-1]} with {len(grids[dim])}"
+                                 f" points equal to {box_lo}")
+                        self.raise_error(TastesBadError, error)
+                    # not matching upper bounds
+                    if ~np.isclose(box_lo, box[dim][0]):
+                        error = (f"The upper bound of box {i} at level {lv}"
+                                 f" ({box[dim][1]} is not equal to the value"
+                                 f" found using the box index {idx[1][dim]} in"
+                                 f" the coordinate grid between {grids[dim][0]}"
+                                 f" and {grids[dim][-1]} with {len(grids[dim])}"
+                                 f" points equal to {box_hi}")
+                        self.raise_error(TastesBadError, error)
+              
+    def taste_maxmins_in_binaries(self):
+        """
+        Method to test the max mins in the level
+        headers match thoses of the binaries
+        """
+        # TODO: move code here
+        pass
+
+    def taste_for_nans_in_binairies(self):
+        """
+        Method to test if there are NaNs in 
+        the binary files
+        """
+        # TODO: move code here
+        pass
+
+    def taste_for_box_shapes_in_binairies(self):
+        """
+        Method validating that the data in the binary
+        files has the shape (nx, ny, nz, n_fields)
+        for every box
+        """
+        # TODO: move code here
+        pass
+
+    def raise_error(self, error, message):
+        """
+        A method to wrap arround raise statements to
+        allow printing errors instead if raising to
+        continue validating after one error if the 
+        option is set
+        """
+        if self.fail_on_bad:
+            raise error(message)
+        else:
+            error_name = str(error).split("'")[1]
+            print(f"Encountered {error_name}:\n", message)
+
 #cell = os.path.join(os.getcwd(),"test_assets","example_plt_2d","Level_0","Cell_D_00000")
 #pck = PlotfileCooker(os.path.join("C:\\","Users","franc","Desktop","Stage-POLY-2024","Data","pltlv4temp_Francois"))
 def tasting(plt_file,
