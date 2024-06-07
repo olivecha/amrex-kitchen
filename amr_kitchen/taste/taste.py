@@ -85,6 +85,19 @@ class Taster(PlotfileCooker):
             self.fail_on_bad = False
         else:
             self.fail_on_bad = True
+        
+        # Assume the plotfile is good
+        self.isgood = True
+        # The attribute value will change in taste
+        # if its bad
+        self.taste()
+
+    def __bool__(self):
+        """
+        Overinding the bool method of the class
+        to return False if the plotfile is Bad
+        """
+        return self.isgood
 
     def taste(self):
         """
@@ -106,7 +119,7 @@ class Taster(PlotfileCooker):
         """
         print(("Validating the box coordinates match"
                " the box indexes in the whole plotfile"
-               " grid...")
+               " grid..."))
 
         # for each level
         for lv in range(self.limit_level + 1):
@@ -179,6 +192,7 @@ class Taster(PlotfileCooker):
         continue validating after one error if the 
         option is set
         """
+        self.isgood = False
         if self.fail_on_bad:
             raise error(message)
         else:
