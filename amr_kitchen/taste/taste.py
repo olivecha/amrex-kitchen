@@ -151,7 +151,7 @@ class Taster(PlotfileCooker):
                                  f" points equal to {box_lo}")
                         self.raise_error(TastesBadError, error)
                     # not matching upper bounds
-                    if ~np.isclose(box_lo, box[dim][0]):
+                    if ~np.isclose(box_hi, box[dim][1]):
                         error = (f"The upper bound of box {i} at level {lv}"
                                  f" ({box[dim][1]} is not equal to the value"
                                  f" found using the box index {idx[1][dim]} in"
