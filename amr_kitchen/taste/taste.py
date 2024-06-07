@@ -311,8 +311,8 @@ class Taster(PlotfileCooker):
             print(f"Encountered {error_name}:\n", message)
 
 #bigfile = os.path.join(os.getcwd(),"test_assets","example_plt_3d")
-file = os.path.join(os.getcwd(),"test_assets","example_plt_3d")
-tst = Taster(file)
+#file = os.path.join(os.getcwd(),"test_assets","example_plt_3d")
+#tst = Taster(file)
 
 
 

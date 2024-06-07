@@ -2,7 +2,7 @@ import os
 import time
 import numpy as np
 import argparse
-from amr_kitchen.taste import tasting
+from amr_kitchen.taste import Taster
 
 
 def main():
@@ -13,6 +13,9 @@ def main():
     parser.add_argument(
             "plotfile", type=str,
             help="Path of the plotfile to validate")
+    parser.add_argument(
+            "--limit_level", "-l", type=int,
+            help="Limit level at which the validation will occur")
     parser.add_argument(
             "--boxes", "-b", action='store_false',
             help="Default to True. Call disables the validation of number and shape of boxes")
@@ -37,12 +40,13 @@ def main():
         raise ValueError("Must specify a plotfile to validate")
     
     # Sanity validation 
-    tasting(plt_file=args.plotfile,
-            boxes=args.boxes,
-            maxmin=args.maxmin,
-            coordinates=args.coordinates,
-            nan=args.nan,
-            nofail=args.nofail,)
+    Taster(plt_file=args.plotfile,
+           limit_level=args.limit_level,
+           boxes=args.boxes,
+           maxmin=args.maxmin,
+           coordinates=args.coordinates,
+           nan=args.nan,
+           nofail=args.nofail,)
 
 if __name__ == "__main__":
     main()
