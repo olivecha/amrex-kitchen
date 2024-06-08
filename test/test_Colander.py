@@ -1,7 +1,6 @@
 import os
 import shutil
 import unittest
-
 from amr_kitchen.colander import Colander
 
 class TestSlice(unittest.TestCase):
