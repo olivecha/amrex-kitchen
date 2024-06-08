@@ -33,7 +33,7 @@ cook"* which is well suited to the analysis of reacting flows.
 - **pantry:** Lists the fields in the plotfile with human readable output (planned work)
 
 - **chef:** Compute (cook) derived thermochemical quantities (recipes) using Cantera
-            `SolutionArrays`. (planned work)
+            `SolutionArrays`.
 
 - **PlotfileCooker:** The base python class used by most tools to process the
                   plotfile data. Also makes available methods which provide
