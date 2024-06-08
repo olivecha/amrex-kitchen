@@ -162,5 +162,4 @@ class TestSlice(unittest.TestCase):
             for ridx, field in zip([0, 4, 5],
                                    fields):
                 self.assertTrue(field == f"R{ridx}\n")
-        #shutil.rmtree(os.path.join("test", "chef_test_byreaction"))
-
+        shutil.rmtree(os.path.join("test", "chef_test_byreaction"))
