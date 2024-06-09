@@ -22,6 +22,18 @@ class TestSliceData(unittest.TestCase):
             self.assertEqual(hdr.ndims, 3)
             self.assertEqual(hdr.limit_level, Lv)
 
+    def test_minmaxs2d(self):
+        hdr = PlotfileCooker(self.pfile2d, maxmins=True)
+        self.assertIsInstance(hdr, PlotfileCooker)
+        self.assertTrue('mins' in hdr.cells[0])
+        self.assertTrue('maxs' in hdr.cells[0])
+
+    def test_minsmaxs3d(self):
+        hdr = PlotfileCooker(self.pfile3d, maxmins=True)
+        self.assertIsInstance(hdr, PlotfileCooker)
+        self.assertTrue('mins' in hdr.cells[0])
+        self.assertTrue('maxs' in hdr.cells[0])
+
     def test_bybinfile_iterator2d(self):
         hdr = PlotfileCooker(self.pfile2d)
         for lv in range(hdr.limit_level + 1):

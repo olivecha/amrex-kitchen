@@ -7,7 +7,8 @@ from tqdm import tqdm
 
 class PlotfileCooker(object):
 
-    def __init__(self, plotfile, limit_level=None, header_only=False):
+    def __init__(self, plotfile, limit_level=None, 
+                 header_only=False, maxmins=False):
         """
         Parse the header data and save as attributes
         """
@@ -51,7 +52,7 @@ class PlotfileCooker(object):
             self.box_centers, self.boxes = self.read_boxes(hfile)
         # Read the cell data
         if not header_only:
-            self.cells = self.read_cell_headers()
+            self.cells = self.read_cell_headers(maxmins)
 
     def __eq__(self, other):
         """
@@ -120,7 +121,7 @@ class PlotfileCooker(object):
             boxes.append(lv_boxes)
         return points, boxes
 
-    def read_cell_headers(self):
+    def read_cell_headers(self, maxmins):
         """
         Read the cell header data for a given level
         """
@@ -151,8 +152,29 @@ class PlotfileCooker(object):
                     _, file, offset = cfile.readline().split()
                     files.append(os.path.join(self.pfile, self.cell_paths[i], file))
                     offsets.append(int(offset))
+                if maxmins:
+                    lvmaxs = []
+                    lvmins = []
+                    cfile.readline()
+                    cfile.readline()
+                    for _ in range(n_cells):
+                        mins_str = cfile.readline().split(',')
+                        lvmins.append(np.array(mins_str[:-1], dtype=float))
+                    cfile.readline()
+                    cfile.readline()
+                    for _ in range(n_cells):
+                        maxs_str = cfile.readline().split(',')
+                        lvmaxs.append(np.array(maxs_str[:-1], dtype=float))
             lvcells["files"] = files
             lvcells["offsets"] = offsets
+            if maxmins:
+                lvcells['mins'] = {}
+                lvcells['maxs'] = {}
+                for field, minvals, maxvals in zip(self.fields, 
+                                                   np.transpose(lvmins),
+                                                   np.transpose(lvmaxs)):
+                    lvcells['mins'][field] = minvals
+                    lvcells['maxs'][field] = maxvals
             cells.append(lvcells)
         return cells
 
