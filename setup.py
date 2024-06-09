@@ -27,6 +27,7 @@ setuptools.setup(
             "mandoline = amr_kitchen.mandoline.cli:main",
             "colander = amr_kitchen.colander.cli:main",
             "spoon = amr_kitchen.spoon.cli:main",
+            "chef = amr_kitchen.chef.cli:main",
         ]
     }
 )
