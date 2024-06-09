@@ -33,7 +33,7 @@ cook"* which is well suited to the analysis of reacting flows.
 - **pantry:** Lists the fields in the plotfile with human readable output (planned work)
 
 - **chef:** Compute (cook) derived thermochemical quantities (recipes) using Cantera
-            `SolutionArrays`. (planned work)
+            `SolutionArrays`.
 
 - **PlotfileCooker:** The base python class used by most tools to process the
                   plotfile data. Also makes available methods which provide
@@ -149,7 +149,7 @@ will only be covered with lower level data. Moving the slice by the grid
 resolution of the highest level is a temporary fix. 
 
 
-## 2. Colander
+## Colander
 
 <img width="300" alt="colander" src="https://github.com/olivecha/amrex-kitchen/assets/78630053/aec452e7-520e-4f2c-bbb2-44c79dd0c6ca">
 
@@ -159,5 +159,63 @@ Strain out variables or levels from plotfiles, see:
 $ colander --help
 ```
 
+## Chef (Work in Progress)
 
+The **chef** has entered the Amrex kitchen: with this tool you can apply **recipes** to plotfiles.
 
+There are predefined recipes like Enthalpy and HeatRelease:
+```
+chef --outdir plthrr --recipe HRR --mech mechanism.yaml --pressure 1 plt00000
+```
+You can apply recipes on selected species, like the reaction rate of H2 and O2:
+```
+chef --outdir pltomega_sp --recipe SRi --species H2 O2 --mech mechanism.yaml --pressure 1 plt00000
+```
+Or selected individual reactions like the net rate of progress:
+```
+chef --outdir pltnetrxrate --recipe RRi --reactions 0 1 2 3 --mech mechanism.yaml --pressure 1 plt00000
+```
+But you can also be the chef and define your own recipes in an arbitrary `.py` file and pass it as an argument. 
+The function must take two or three arguments. if it takes three they are a dictionnary containing the indexes
+of the fields in the plotfile, a box array with shape (nx, ny, nz, nfields) and a Cantera SolutionArray with shape
+(nx, ny, nz). In the case of two arguments the SolutionArray is omitted which is faster. The docstring of the 
+function is taken as the field name in the plotfile.
+
+For example using the SolutionArray to access the reactions rates and compute the ratio between the production
+rates of two species:
+```python
+# my_recipe.py
+
+def recipe(field_indexes, box_array, sol_array):
+    """
+    fuel_oxy_omega_ratio
+    """
+    id_H2 = sol_array.species_index('H2')
+    id_O2 = sol_array.species_index('O2')
+    omega_H2 = sol_array.net_production_rates[:, :, :, id_H2]
+    omega_O2 = sol_array.net_production_rates[:, :, :, id_O2]
+    return omega_H2/omega_O2
+```
+Then using the following command:
+```
+$ chef --output pltrxratio --recipe my_recipe.py --mech mechanism.yaml --pressure 1 plt00000
+```
+Or computing the difference between the temperature and an arbitrary value wich is function of 
+the progress variable:
+```
+# my_recipe2.py
+
+T_vs_C = a_user_defined_function...
+
+def recipe(field_indexes, box_array):
+    """
+    T_minus_T_C
+    """
+    temp = box_array[:, :, :, field_indexes["temp"]]
+    C = box_array[:, :, :, field_indexes["progress_variable"]]
+    return temp - T_vs_C(C)
+```
+Which is computed using a similar command (without needing mechanism or pressure inputs):
+```
+$ chef --output pltTdiff --recipe my_recipe2.py plt00000
+```
