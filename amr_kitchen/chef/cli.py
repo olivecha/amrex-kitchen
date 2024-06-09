@@ -3,6 +3,7 @@ import time
 import numpy as np
 import argparse
 from .chef import Chef
+from tqdm import tqdm
 
 
 def main():
@@ -53,7 +54,7 @@ def main():
                      species=args.species,
                      reactions=args.reactions,
                      mech=args.mech,
-                     serial=True,
+                     serial=False,
                      pressure=args.pressure)
     plot_chef.cook()
 
