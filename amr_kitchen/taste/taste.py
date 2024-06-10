@@ -199,10 +199,16 @@ class Taster(PlotfileCooker):
 
                 for box in all_mins_box:
                     mins_cell.append(np.min(box))
+                if len(mins_cell) == 0:
+                    error = (f"The array is empty")
+                    self.raise_error(TastesBadError,error)
                 all_mins_cells.append(np.min(mins_cell))
 
                 for box in all_maxs_box:
                     maxs_cell.append(np.max(box))
+                if len(maxs_cell) == 0:
+                    error = (f"The array is empty")
+                    self.raise_error(TastesBadError,error)
                 all_maxs_cells.append(np.max(maxs_cell))
 
             for m in all_mins_cells:

@@ -3,6 +3,7 @@ import shutil
 import linecache
 import numpy as np
 from tqdm import tqdm
+from amr_kitchen.utils import TastesBadError
 
 
 class PlotfileCooker(object):
@@ -144,7 +145,10 @@ class PlotfileCooker(object):
                 n_cells = int(cfile.readline().split()[0].replace('(', ''))
                 indexes = []
                 for _ in range(n_cells):
-                    start, stop, _ = cfile.readline().split()
+                    try:
+                        start, stop, _ = cfile.readline().split()
+                    except ValueError as e:
+                        raise TastesBadError("")
                     start = np.array(start.replace('(', '').replace(')', '').split(','), dtype=int)
                     stop = np.array(stop.replace('(', '').replace(')', '').split(','), dtype=int)
                     indexes.append([start, stop])
@@ -389,3 +393,9 @@ class PlotfileCooker(object):
             for f, data in zip(self.fields, np.transpose(vmaxs)):
                 all_maxs[lv][f] = data
         return all_mins, all_maxs
+    
+"""
+pck = PlotfileCooker(os.path.join("test_assets",
+                                     "bad_plotfiles",
+                                     "plt_2d_missingbindata"))"""
+
