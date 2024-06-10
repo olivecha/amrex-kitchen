@@ -8,7 +8,7 @@ from tqdm import tqdm
 class PlotfileCooker(object):
 
     def __init__(self, plotfile, limit_level=None, 
-                 header_only=False, maxmins=False):
+                 header_only=False, maxmins=False, ghost=False):
         """
         Parse the header data and save as attributes
         """
@@ -53,6 +53,10 @@ class PlotfileCooker(object):
         # Read the cell data
         if not header_only:
             self.cells = self.read_cell_headers(maxmins)
+        # Compute the ghost boxes map around each box
+        if ghost:
+            self.box_arrays, self.barr_indices = self.compute_box_array()
+            self.ghost_map = self.compute_ghost_map()
 
     def __eq__(self, other):
         """
@@ -178,6 +182,73 @@ class PlotfileCooker(object):
             cells.append(lvcells)
         return cells
 
+    def compute_box_array(self):
+        """
+        Compute a Nx * Ny * Nz array defining the
+        adjacency of the boxes.
+        Nx is equal to the number of cells in the
+        x direction divided by the smallest box shape
+        """
+        # Cell resolution in each direction
+        box_shapes = self.unique_box_shapes()
+        box_rez = np.min(box_shapes, axis=0)
+        box_arrays = []
+        box_array_indices = []
+        for lv in range(self.limit_level + 1):
+            box_array_shape = self.grid_sizes[lv] // box_rez
+            box_array = -1 * np.ones(box_array_shape, dtype=int)
+            lv_barray_indices = []
+            for i, idx in enumerate(self.cells[lv]["indexes"]):
+                bidx_lo = idx[0] // box_rez
+                bidx_hi = idx[1] // box_rez
+                box_array[bidx_lo[0]:bidx_hi[0] + 1,
+                          bidx_lo[1]:bidx_hi[1] + 1,
+                          bidx_lo[2]:bidx_hi[2] + 1] = i
+                lv_barray_indices.append([bidx_lo, bidx_hi])
+            box_arrays.append(box_array)
+            box_array_indices.append(lv_barray_indices)
+        return box_arrays, box_array_indices
+
+    def compute_ghost_map(self):
+        """
+        This computes indices of the boxes adjacent 
+        to a given box. Indices have shape 3x2 for the
+        low and high faces of every dimension. If no box
+        is adjacent in a given direction the index is set
+        to None
+        """
+		ghost_map = []
+		for lv in range(self.limit_level + 1):
+			lvindices = self.cells[4]['indexes']
+			lvbarr_indices = self.barr_indices[lv]
+			box_array = self.box_arrays[lv]
+			lv_map = []
+			for idx, bidx in zip(lvindices, lvbarr_indices):
+				ghost_boxes =  [[None, None], 
+								[None, None], 
+								[None, None]]
+				idx_lo = bidx[0]
+				idx_hi = bidx[1]
+				for coord in range(3):
+					gidx_lo = idx_lo.copy()
+					gidx_lo[coord] -= 1
+					if all(gidx_lo >= 0):
+						box_lo = box_array[gidx_lo[0],
+										   gidx_lo[1],
+										   gidx_lo[2]]
+						if box_lo >= 0:
+							ghost_boxes[coord][0] = box_lo
+					gidx_hi = idx_hi.copy()
+					gidx_hi[coord] += 1
+					if all(gidx_hi < box_array.shape[coord]):
+						box_hi = box_array[gidx_hi[0],
+										   gidx_hi[1],
+										   gidx_hi[2]]
+						if box_hi >= 0:
+							ghost_boxes[coord][1] = box_hi
+				lv_map.append(ghost_boxes)
+			ghost_map.append(lv_map)
+		return ghost_map
 
     def field_index(self, field):
         """ return the index of a data field """
