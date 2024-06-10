@@ -465,14 +465,16 @@ class Chef(PlotfileCooker):
                         "idx_O2":self.idx_O2}
                 mp_calls.append(call)
 
-            print(f"Cooking level {lv}")
             if self.serial:
+                print(f"Cooking level {lv} in serial")
                 output = []
-                for args in mp_calls:
+                for args in tqdm(mp_calls):
                     output.append(self.knife(args))
             else:
-                with multiprocessing.Pool() as pool:
-                    output = pool.map(self.knife, mp_calls)
+                print(f"Cooking level {lv} in parallel")
+                pool = multiprocessing.Pool()
+                output = tqdm(pool.imap(self.knife, mp_calls),
+                              total=len(mp_calls))
             #Reorder the offsets to match the box order
             mapped_offsets = np.empty(len(self.boxes[lv]), dtype=int)
             mapped_mins = np.empty((len(self.boxes[lv]), 
