@@ -76,7 +76,7 @@ class Taster(PlotfileCooker):
         Constructor for the plotfile tester
         """
         # Instantiate the parent class (PlotfileCooker)
-        super().__init__(plt_file, limit_level=limit_level)
+        super().__init__(plt_file, limit_level=limit_level, validate=True)
         self.boxes_bounds = boxes
         self.boxes_maxmin = maxmin
         self.coordinates = coordinates

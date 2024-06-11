@@ -8,7 +8,7 @@ from amr_kitchen.utils import TastesBadError
 
 class PlotfileCooker(object):
 
-    def __init__(self, plotfile, limit_level=None, header_only=False):
+    def __init__(self, plotfile, limit_level=None, header_only=False, validate=False):
         """
         Parse the header data and save as attributes
         """
@@ -50,11 +50,19 @@ class PlotfileCooker(object):
             # Read the box geometry
             #if not header_only:
             self.box_centers, self.boxes = self.read_boxes(hfile)
+        # Validation of Sanity
+        if validate:
+            try:
+                self.read_cell_headers()
+            except ValueError as e:
+                raise TastesBadError("... unable to create PlotfileCooker")
         # Read the cell data
         if not header_only:
             self.cells = self.read_cell_headers()[0]
         # Gets the number fields in the plt_file
         self.nfields = len(self.fields)
+
+
 
     def __eq__(self, other):
         """
@@ -145,10 +153,10 @@ class PlotfileCooker(object):
                 n_cells = int(cfile.readline().split()[0].replace('(', ''))
                 indexes = []
                 for _ in range(n_cells):
-                    try:
-                        start, stop, _ = cfile.readline().split()
-                    except ValueError as e:
-                        raise TastesBadError("")
+                    #try:
+                    start, stop, _ = cfile.readline().split()
+                    #except ValueError as e:
+                        #raise TastesBadError("")
                     start = np.array(start.replace('(', '').replace(')', '').split(','), dtype=int)
                     stop = np.array(stop.replace('(', '').replace(')', '').split(','), dtype=int)
                     indexes.append([start, stop])
@@ -393,9 +401,5 @@ class PlotfileCooker(object):
             for f, data in zip(self.fields, np.transpose(vmaxs)):
                 all_maxs[lv][f] = data
         return all_mins, all_maxs
-    
-"""
-pck = PlotfileCooker(os.path.join("test_assets",
-                                     "bad_plotfiles",
-                                     "plt_2d_missingbindata"))"""
+
 

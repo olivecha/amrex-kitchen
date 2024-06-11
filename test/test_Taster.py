@@ -90,7 +90,8 @@ class TestTaste(unittest.TestCase):
         with self.assertRaises(TastesBadError):
             Taster(self.missingbindata_2d)
         # This should just return False
-        #self.assertFalse(Taster(self.missingbindata_2d))
+        self.assertFalse(Taster(self.missingbindata_2d,
+                                nofail=True))
     
     # Voir avec Olivier 
     def test_missing_indexes_in_level_header_2d(self):
@@ -100,8 +101,8 @@ class TestTaste(unittest.TestCase):
         with self.assertRaises(TastesBadError):
             Taster(self.missingindexes_2d)
         # This should just return False
-        #self.assertFalse(Taster(self.missingindexes_2d,
-        #                         nofail=True))
+        self.assertFalse(Taster(self.missingindexes_2d,
+                                 nofail=True))
     
     def test_badshapes_of_boxes_3d(self):
         """
@@ -131,8 +132,8 @@ class TestTaste(unittest.TestCase):
         with self.assertRaises(TastesBadError):
             Taster(self.missingbindata_3d)
         # This should just return False
-        #self.assertFalse(Taster(self.missingbindata_3d,
-                                #nofail=True))
+        self.assertFalse(Taster(self.missingbindata_3d,
+                                nofail=True))
     
     # Voir avec Olivier 
     def test_missing_indexes_in_level_header_3d(self):
@@ -142,8 +143,8 @@ class TestTaste(unittest.TestCase):
         with self.assertRaises(TastesBadError):
             Taster(self.missingindexes_3d)
         # This should just return False
-        #self.assertFalse(Taster(self.missingindexes_3d,
-                               # nofail=True))
+        self.assertFalse(Taster(self.missingindexes_3d,
+                               nofail=True))
         
 
 
