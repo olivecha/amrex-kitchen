@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import traceback
 import multiprocessing
 import pickle
 import numpy as np
@@ -75,8 +76,6 @@ class Taster(PlotfileCooker):
         """
         Constructor for the plotfile tester
         """
-        # Instantiate the parent class (PlotfileCooker)
-        super().__init__(plt_file, limit_level=limit_level, validate=True)
         self.boxes_bounds = boxes
         self.boxes_maxmin = maxmin
         self.coordinates = coordinates
@@ -90,7 +89,19 @@ class Taster(PlotfileCooker):
         self.isgood = True
         # The attribute value will change in taste
         # if its bad
-        self.taste()
+        try:
+            # Instantiate the parent class (PlotfileCooker)
+            super().__init__(plt_file, 
+                             limit_level=limit_level, 
+                             validate_mode=True)
+            self.taste()
+        except Exception as e:
+            self.isgood = False
+            if self.fail_on_bad:
+                raise e
+            else:
+                tb = traceback.format_exc()
+                print(tb)
 
     def __bool__(self):
         """
