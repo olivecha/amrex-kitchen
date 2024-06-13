@@ -9,8 +9,9 @@ from amr_kitchen.utils import TastesBadError
 
 class PlotfileCooker(object):
 
-    def __init__(self, plotfile, limit_level=None, 
-                 header_only=False, validate_mode=False):
+    def __init__(self, plotfile, limit_level=None, header_only=False,
+                 validate_mode=False, header_only=False, maxmins=False,
+                 ghost=False):
         """
         Parse the header data and save as attributes
         """
@@ -70,7 +71,7 @@ class PlotfileCooker(object):
         # Read the cell data
         if not header_only:
             try:
-                self.cells = self.read_cell_headers(validate_mode=validate_mode)[0]
+                self.cells = self.read_cell_headers(maxmins, validate_mode)
             except Exception as e:
                 if validate_mode:
                     catched_tback = traceback.format_exc()
@@ -85,6 +86,10 @@ class PlotfileCooker(object):
                     raise e
         # Gets the number fields in the plt_file
         self.nfields = len(self.fields)
+        # Compute the ghost boxes map around each box
+        if ghost:
+            self.box_arrays, self.barr_indices = self.compute_box_array()
+            self.ghost_map = self.compute_ghost_map()
 
     def __eq__(self, other):
         """
@@ -153,7 +158,7 @@ class PlotfileCooker(object):
             boxes.append(lv_boxes)
         return points, boxes
 
-    def read_cell_headers(self, validate_mode=False):
+    def read_cell_headers(self, maxmins, validate_mode):
         """
         Read the cell header data and the maxs/mins for a given level
         """
@@ -194,39 +199,99 @@ class PlotfileCooker(object):
                     _, file, offset = cfile.readline().split()
                     files.append(os.path.join(self.pfile, self.cell_paths[i], file))
                     offsets.append(int(offset))
-                # Let's come back to the beginning of the file 
-                cfile.seek(0)
-                # Let's read the mins and maxs of the level's header
-                for _ in range(5):
+                if maxmins:
+                    lvmaxs = []
+                    lvmins = []
                     cfile.readline()
-                for _ in range(len(self.boxes[i])):
                     cfile.readline()
-                cfile.readline()
-                cfile.readline()
-                for _ in range(len(self.boxes[i])):
+                    for _ in range(n_cells):
+                        mins_str = cfile.readline().split(',')
+                        lvmins.append(np.array(mins_str[:-1], dtype=float))
                     cfile.readline()
-                cfile.readline()
-                cfile.readline()
-                vmins = []
-                for _ in range(len(self.boxes[i])):
-                    cvmins = cfile.readline().split(',')
-                    vmins.append(np.array(cvmins[:-1], dtype=float))
-                cfile.readline()
-                cfile.readline()
-                vmaxs = []
-                for _ in range(len(self.boxes[i])):
-                    cvmaxs = cfile.readline().split(',')
-                    vmaxs.append(np.array(cvmaxs[:-1], dtype=float))
-            for f, data in zip(self.fields, np.transpose(vmins)):
-                all_mins[i][f] = data
-            for f, data in zip(self.fields, np.transpose(vmaxs)):
-                all_maxs[i][f] = data
-
+                    cfile.readline()
+                    for _ in range(n_cells):
+                        maxs_str = cfile.readline().split(',')
+                        lvmaxs.append(np.array(maxs_str[:-1], dtype=float))
             lvcells["files"] = files
             lvcells["offsets"] = offsets
+            if maxmins:
+                lvcells['mins'] = {}
+                lvcells['maxs'] = {}
+                for field, minvals, maxvals in zip(self.fields, 
+                                                   np.transpose(lvmins),
+                                                   np.transpose(lvmaxs)):
+                    lvcells['mins'][field] = minvals
+                    lvcells['maxs'][field] = maxvals
             cells.append(lvcells)
         return cells, all_mins, all_maxs
 
+    def compute_box_array(self):
+        """
+        Compute a Nx * Ny * Nz array defining the
+        adjacency of the boxes.
+        Nx is equal to the number of cells in the
+        x direction divided by the smallest box shape
+        """
+        # Cell resolution in each direction
+        box_shapes = self.unique_box_shapes()
+        box_rez = np.min(box_shapes, axis=0)
+        box_arrays = []
+        box_array_indices = []
+        for lv in range(self.limit_level + 1):
+            box_array_shape = self.grid_sizes[lv] // box_rez
+            box_array = -1 * np.ones(box_array_shape, dtype=int)
+            lv_barray_indices = []
+            for i, idx in enumerate(self.cells[lv]["indexes"]):
+                bidx_lo = idx[0] // box_rez
+                bidx_hi = idx[1] // box_rez
+                box_array[bidx_lo[0]:bidx_hi[0] + 1,
+                          bidx_lo[1]:bidx_hi[1] + 1,
+                          bidx_lo[2]:bidx_hi[2] + 1] = i
+                lv_barray_indices.append([bidx_lo, bidx_hi])
+            box_arrays.append(box_array)
+            box_array_indices.append(lv_barray_indices)
+        return box_arrays, box_array_indices
+
+    def compute_ghost_map(self):
+        """
+        This computes indices of the boxes adjacent 
+        to a given box. Indices have shape 3x2 for the
+        low and high faces of every dimension. If no box
+        is adjacent in a given direction the index is set
+        to None
+        """
+		ghost_map = []
+		for lv in range(self.limit_level + 1):
+			lvindices = self.cells[4]['indexes']
+			lvbarr_indices = self.barr_indices[lv]
+			box_array = self.box_arrays[lv]
+			lv_map = []
+			for idx, bidx in zip(lvindices, lvbarr_indices):
+				ghost_boxes =  [[None, None], 
+								[None, None], 
+								[None, None]]
+				idx_lo = bidx[0]
+				idx_hi = bidx[1]
+				for coord in range(3):
+					gidx_lo = idx_lo.copy()
+					gidx_lo[coord] -= 1
+					if all(gidx_lo >= 0):
+						box_lo = box_array[gidx_lo[0],
+										   gidx_lo[1],
+										   gidx_lo[2]]
+						if box_lo >= 0:
+							ghost_boxes[coord][0] = box_lo
+					gidx_hi = idx_hi.copy()
+					gidx_hi[coord] += 1
+					if all(gidx_hi < box_array.shape[coord]):
+						box_hi = box_array[gidx_hi[0],
+										   gidx_hi[1],
+										   gidx_hi[2]]
+						if box_hi >= 0:
+							ghost_boxes[coord][1] = box_hi
+				lv_map.append(ghost_boxes)
+			ghost_map.append(lv_map)
+		return ghost_map
 
     def field_index(self, field):
         """ return the index of a data field """
@@ -242,12 +307,14 @@ class PlotfileCooker(object):
         """
         Re-Create the tree structure of the plotfile in :outpath:
         """
+        if limit_level is None:
+            limit_level = self.limit_level
         os.makedirs(os.path.join(os.getcwd(),outpath), exist_ok=True)
         #shutil.copy(os.path.join(self.pfile, 'Header'),
         #           outpath)
-        for pth in self.cell_paths:
+        for pth in self.cell_paths[:limit_level + 1]:
             level_dir = pth
-            print(os.path.join(os.getcwd(),outpath, level_dir))
+            #print(os.path.join(os.getcwd(),outpath, level_dir))
             os.makedirs(os.path.join(os.getcwd(),outpath, level_dir), exist_ok=True)
             #shutil.copy(os.path.join(self.pfile, pth + '_H'),
             #            os.path.join(outpath, level_dir))
@@ -391,40 +458,16 @@ class PlotfileCooker(object):
                 # Write the Level path info
                 hfile.write(f"Level_{lv}/Cell\n")
 
-    def boxes_min_max(self):
+    def unique_box_shapes(self):
         """
-        Returns the mins and maxs values for each level and field
+        Find the unique box shape tuples
+        for each level
         """
-        all_maxs = []
-        all_mins = []
+        shapes = []
         for lv in range(self.limit_level + 1):
-            all_maxs.append({})
-            all_mins.append({})
-            with open(os.path.join(self.pfile, self.cell_paths[lv], "Cell_H")) as cpck:
-                for _ in range(5):
-                    cpck.readline()
-                for _ in range(len(self.boxes[lv])):
-                    cpck.readline()
-                cpck.readline()
-                cpck.readline()
-                for _ in range(len(self.boxes[lv])):
-                    cpck.readline()
-                cpck.readline()
-                cpck.readline()
-                vmins = []
-                for _ in range(len(self.boxes[lv])):
-                    cvmins = cpck.readline().split(',')
-                    vmins.append(np.array(cvmins[:-1], dtype=float))
-                cpck.readline()
-                cpck.readline()
-                vmaxs = []
-                for _ in range(len(self.boxes[lv])):
-                    cvmaxs = cpck.readline().split(',')
-                    vmaxs.append(np.array(cvmaxs[:-1], dtype=float))
-            for f, data in zip(self.fields, np.transpose(vmins)):
-                all_mins[lv][f] = data
-            for f, data in zip(self.fields, np.transpose(vmaxs)):
-                all_maxs[lv][f] = data
-        return all_mins, all_maxs
-
-
+            for idx in self.cells[lv]['indexes']:
+                shape = idx[1] - idx[0] + 1
+                shapes.append(tuple(shape))
+        shapes = np.unique(shapes, axis=0)
+        shapes = [tuple(shape) for shape in shapes]
+        return shapes
