@@ -182,10 +182,7 @@ class PlotfileCooker(object):
                 n_cells = int(cfile.readline().split()[0].replace('(', ''))
                 indexes = []
                 for _ in range(n_cells):
-                    #try:
                     start, stop, _ = cfile.readline().split()
-                    #except ValueError as e:
-                        #raise TastesBadError("")
                     start = np.array(start.replace('(', '').replace(')', '').split(','), dtype=int)
                     stop = np.array(stop.replace('(', '').replace(')', '').split(','), dtype=int)
                     indexes.append([start, stop])

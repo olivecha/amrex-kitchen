@@ -1,0 +1,83 @@
+HyperCLaw-V1.1
+57
+x_velocity
+y_velocity
+z_velocity
+density
+rhoh
+temp
+RhoRT
+divu
+gradpx
+gradpy
+gradpz
+I_R(H2)
+I_R(H)
+I_R(O)
+I_R(O2)
+I_R(OH)
+I_R(H2O)
+I_R(HO2)
+I_R(CH2)
+I_R(CH2(S))
+I_R(CH3)
+I_R(CH4)
+I_R(CO)
+I_R(CO2)
+I_R(HCO)
+I_R(CH2O)
+I_R(CH3O)
+I_R(C2H4)
+I_R(C2H5)
+I_R(C2H6)
+I_R(N2)
+I_R(AR)
+FunctCall
+HeatRelease
+avg_pressure
+mag_vort
+Y(H2)
+Y(H)
+Y(O)
+Y(O2)
+Y(OH)
+Y(H2O)
+Y(HO2)
+Y(CH2)
+Y(CH2(S))
+Y(CH3)
+Y(CH4)
+Y(CO)
+Y(CO2)
+Y(HCO)
+Y(CH2O)
+Y(CH3O)
+Y(C2H4)
+Y(C2H5)
+Y(C2H6)
+Y(N2)
+Y(AR)
+3
+0
+1
+0 0 0 
+0.016 0.016 0.032000000000000001 
+2 
+((0,0,0) (15,15,31) (0,0,0)) ((0,0,0) (31,31,63) (0,0,0)) 
+0 0 
+0.001 0.001 0.001 
+0.00050000000000000001 0.00050000000000000001 0.00050000000000000001 
+0
+0
+0 1 0
+0
+0 0.016
+0 0.016
+0 0.032000000000000001
+Level_0/Cell
+1 1 0
+0
+0 0.016
+0 0.016
+0 0.016
+Level_1/Cell
