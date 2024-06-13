@@ -211,44 +211,66 @@ class PlotfileCooker(object):
 
     def compute_ghost_map(self):
         """
-        This computes indices of the boxes adjacent 
+        This computes indices of the boxes adjacent
         to a given box. Indices have shape 3x2 for the
         low and high faces of every dimension. If no box
         is adjacent in a given direction the index is set
         to None
         """
-		ghost_map = []
-		for lv in range(self.limit_level + 1):
-			lvindices = self.cells[4]['indexes']
-			lvbarr_indices = self.barr_indices[lv]
-			box_array = self.box_arrays[lv]
-			lv_map = []
-			for idx, bidx in zip(lvindices, lvbarr_indices):
-				ghost_boxes =  [[None, None], 
-								[None, None], 
-								[None, None]]
-				idx_lo = bidx[0]
-				idx_hi = bidx[1]
-				for coord in range(3):
-					gidx_lo = idx_lo.copy()
-					gidx_lo[coord] -= 1
-					if all(gidx_lo >= 0):
-						box_lo = box_array[gidx_lo[0],
-										   gidx_lo[1],
-										   gidx_lo[2]]
-						if box_lo >= 0:
-							ghost_boxes[coord][0] = box_lo
-					gidx_hi = idx_hi.copy()
-					gidx_hi[coord] += 1
-					if all(gidx_hi < box_array.shape[coord]):
-						box_hi = box_array[gidx_hi[0],
-										   gidx_hi[1],
-										   gidx_hi[2]]
-						if box_hi >= 0:
-							ghost_boxes[coord][1] = box_hi
-				lv_map.append(ghost_boxes)
-			ghost_map.append(lv_map)
-		return ghost_map
+        # The ghost boxes map is defined such as
+        # for a given lv the box with index idx has
+        # the following neighbours in the coordinate
+        # coord with direction 0 (negative)
+        # neighbours = ghost_map[lv][idx][coord][0]
+        ghost_map = []
+        # For each level
+        for lv in range(self.limit_level + 1):
+            # All the box indices at the current level
+            lvindices = self.cells[4]['indexes']
+            # All the box array indices at the current level
+            lvbarr_indices = self.barr_indices[lv]
+            # Get the 3D array mapping neighbours
+            box_array = self.box_arrays[lv]
+            # Create a map for each level
+            lv_map = []
+            # For every index and index in the box array
+            for idx, bidx in zip(lvindices, lvbarr_indices):
+                # The map for a given box is a list in each
+                # Coordinate and direction
+                ghost_boxes = [[[], []],
+                               [[], []],
+                               [[], []]]
+                # Start and stop indices in the 3D box array
+                idx_lo = bidx[0]
+                idx_hi = bidx[1]
+                # For every coordinate
+                for coord in range(3):
+                    # Neighboords in direction (-) at coord
+                    # go one index lower in the box array
+                    neighbour_idx = idx_lo[coord] - 1
+                    # If not at the beginning of the domain
+                    if neighbour_idx >= 0:
+                        barr_slice = [slice(idx_lo[0], idx_hi[0] + 1),
+                                      slice(idx_lo[1], idx_hi[1] + 1),
+                                      slice(idx_lo[2], idx_hi[2] + 1)]
+                        barr_slice[coord] = neighbour_idx
+                        barr_slice = tuple(barr_slice)
+                        boxes_lo = np.unique(box_array[barr_slice].flatten())
+                        ghost_boxes[coord][0] = [bl for bl in boxes_lo if bl >= 0]
+
+                    neighbour_idx = idx_hi[coord] + 1
+                    if neighbour_idx < box_array.shape[coord]:
+                        barr_slice = [slice(idx_lo[0], idx_hi[0] + 1),
+                                      slice(idx_lo[1], idx_hi[1] + 1),
+                                      slice(idx_lo[2], idx_hi[2] + 1)]
+                        barr_slice[coord] = neighbour_idx
+                        barr_slice = tuple(barr_slice)
+                        boxes_hi = np.unique(box_array[barr_slice].flatten())
+                        ghost_boxes[coord][0] = [bl for bl in boxes_hi if bl >= 0]
+                lv_map.append(ghost_boxes)
+            lv_map = lv_map
+            ghost_map.append(lv_map)
+        return ghost_map
 
     def field_index(self, field):
         """ return the index of a data field """
@@ -291,6 +313,23 @@ class PlotfileCooker(object):
             yield (bf,
                    offsets[bf_indexes],
                    indexes[bf_indexes],)
+
+    def bybinfile_indexed(self, lv):
+        """
+        Iterate over header data at lv
+        by individual binary files
+        """
+        bfiles = np.array(self.cells[lv]['files'])
+        indexes = np.array(self.cells[lv]['indexes'])
+        offsets = np.array(self.cells[lv]['offsets'])
+
+        box_indexes = np.arange(len(bfiles))
+        for bf in np.unique(bfiles):
+            bf_indexes = box_indexes[bfiles == bf]
+            yield (bf,
+                   offsets[bf_indexes],
+                   indexes[bf_indexes],
+                   box_indexes)
 
     def bybox(self, lv):
         """
