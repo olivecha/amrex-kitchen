@@ -93,7 +93,8 @@ class Taster(PlotfileCooker):
             # Instantiate the parent class (PlotfileCooker)
             super().__init__(plt_file, 
                              limit_level=limit_level, 
-                             validate_mode=True)
+                             validate_mode=True,
+                             maxmins=True)
             self.taste()
         except Exception as e:
             self.isgood = False
@@ -193,12 +194,13 @@ class Taster(PlotfileCooker):
             print(f"Level {lv} ...")
             # mins and maxs in the header data 
             mins_header, maxs_header = [], []
-            _, all_mins_header, all_maxs_header = self.read_cell_headers()
-            for key in all_mins_header[lv]:
+            all_maxs_header = self.cells[lv]['maxs']
+            all_mins_header = self.cells[lv]['mins']
+            for ky in all_mins_header:
                 # Ici tu calcule les valeurs min/maxs entre toutes les boxes
                 # Pour le niveau courant
-                mins_header.append(np.min(all_mins_header[lv][key]))
-                maxs_header.append(np.max(all_maxs_header[lv][key]))
+                mins_header.append(np.min(all_mins_header[ky]))
+                maxs_header.append(np.max(all_maxs_header[ky]))
             
             min_header, max_header = np.min(mins_header), np.max(maxs_header)
             all_mins_cells, all_maxs_cells = [], []
@@ -327,226 +329,3 @@ class Taster(PlotfileCooker):
             error_name = str(error).split("'")[1]
             print(f"Encountered {error_name}:\n", message)
 
-#bigfile = os.path.join(os.getcwd(),"test_assets","example_plt_3d")
-#file = os.path.join(os.getcwd(),"test_assets","example_plt_3d")
-#tst = Taster(file)
-
-
-
-
-
-#######################################################################################
-
-#cell = os.path.join(os.getcwd(),"test_assets","example_plt_2d","Level_0","Cell_D_00000")
-#pck = PlotfileCooker(os.path.join("C:\\","Users","franc","Desktop","Stage-POLY-2024","Data","pltlv4temp_Francois"))
-"""def tasting(plt_file,
-            boxes=True,
-            maxmin=True,
-            coordinates=True,
-            nan=True,
-            nofail=False,):
-    # For testing 
-    if boxes:
-        print("boxes yes")
-    else:
-        print("boxes no")
-    if maxmin:
-        print("maxmin yes")
-    else:
-        print("maxmin no")
-    if coordinates:
-        print("coordinates yes")
-    else:
-        print("coordinates no")
-    if nan:
-        print("nan yes")
-    else:
-        print("nan no")
-    if nofail:
-        print("nofail yes")
-    else:
-        print("nofail no")
-
-    # Create the PlotfileCooker class instance
-    pck = PlotfileCooker(plt_file)
-
-    # Check that the number of box coordinates matches the
-
-    # **** My bad but we should always use the name "box" instead of cell ****
-    # Faudrait combiner les attributs boxs et cells mais c'est un bon petit 
-    # projet de refractoring genre pck.boxes devient pck.boxes['geo']
-    # et pck.cells['files'] devient pck.boxes['files']
-
-    # number of files in the cell header data
-    for lv in range(pck.limit_level + 1):
-        print(f"Tasting level {lv} ...")
-        # Checking if all coordonates match
-        if coordinates:
-            for dim in range(pck.ndims):
-                dim_grid = np.linspace(pck.geo_low[dim] + pck.dx[lv][dim]/2,
-                        pck.geo_high[dim] - pck.dx[lv][dim]/2,
-                        pck.grid_sizes[lv][dim])
-                for i in range(len(pck.boxes[lv])):
-                    # Indexs to validate (each box has an index)
-                    idx = pck.cells[lv]["indexes"][i]
-                    # Conrespondant box
-                    box = pck.boxes[lv][i]
-                    # Trouver les coordonnées de la box avec les indexes
-                    box_x_lo = dim_grid[idx[0][0]] - pck.dx[lv][dim]/2 # Pourquoi ça ne marcherait pas avec idx[0][dim]
-                    box_x_hi = dim_grid[idx[1][0]] + pck.dx[lv][dim]/2 #                                    idx[1][dim] ??
-                    # Validation
-                    if not nofail:
-                        try:
-                            raise TastesBadError((box[0][0],box_x_lo))
-                        except TastesBadError as e:
-                            if not np.isclose(e.value[0], e.value[1]):
-                                print(f"Low coordonates are not the same : {e.value[0]} != {e.value[1]} at ...")
-                                raise TastesBadError("Low Coordonate Error")
-                        try:
-                            raise TastesBadError((box[0][1],box_x_hi))
-                        except TastesBadError as e:
-                            if not np.isclose(e.value[0], e.value[1]):
-                                print(f"High coordonates are not the same : {e.value[0]} != {e.value[1]} at ...")
-                                raise TastesBadError("High Coordonate Error")
-                    else:
-                        if not np.isclose(box[0][0], box_x_lo):
-                            print(f"Low coordonates are not the same : {box[0][0]} != {box_x_lo} at ...")
-                        if not np.isclose(box[0][1], box_x_hi):
-                            print(f"High coordonates are not the same : {box[0][1]} != {box_x_hi} at ...")
-                
-
-        # number of cells and fields according to the level header 
-        nbr_cells_header = len(pck.cells[lv]['files'])
-        # Same nbr of fields at each level 
-        nbr_fields_header = pck.nfields
-
-        if maxmin:
-            # mins and maxs in the header data 
-            mins_header, maxs_header = [], []
-            _, all_mins_header, all_maxs_header = pck.read_cell_headers()
-            for key in all_mins_header[lv]:
-                # Ici tu calcule les valeurs min/maxs entre toutes les boxes
-                # Pour le niveau courant
-                mins_header.append(np.min(all_mins_header[lv][key]))
-                maxs_header.append(np.max(all_maxs_header[lv][key]))
-            # Ici tu calcule les valeurs max/mins parmis tout les fields
-            # Je pense pas c'est ce que tu voulais faire...
-            # Par contre c'est intéressant à avoir pour regarder s'il y a des NotANumber
-            # Tu pourrais valider np.nanmax(mins_header) == np.max(mins_header)...
-            # Tu pourrais profiler mais je pense c'est plus rapide que np.isnan(data).any()
-            # Après je sais pas si le module qui sauvegarde les plotfiles filtre les nans 
-            # Pour les max mins des boxes je vais regarder
-            min_header, max_header = np.min(mins_header), np.max(maxs_header)
-            all_mins_cells, all_maxs_cells = [], []
-
-        nbr_box = 0 
-        for cells in pck.bybinfile(lv):
-            # Let's check if there are any NaN in the boxes
-            if nan:
-                with open(cells[0],"rb") as bfile:
-                    # METTRE While True to read all boxes !!
-                    # Ici, on en lit juste une
-                    h = bfile.readline()
-                    tshape = shapes_from_header(h,pck.ndims)
-                    arr = np.fromfile(bfile, "float64", np.prod(tshape))
-                    arr = arr.reshape(tshape,order="F")
-                    
-                    # For every field
-                    for i in range(tshape[-1]):
-                        # HOW TO NOT HARDCODE THIS ?
-                        if pck.ndims == 2:
-                            array = arr[:, :, i]
-                        elif pck.ndims == 3:
-                            array = arr[:, :, :, i]
-                        # Validation
-                        if not nofail:
-                            try:
-                                raise TastesBadError((np.max(array),np.nanmax(array)))
-                            except TastesBadError as e:
-                                if e.value[0] != e.value[1]:
-                                    print(f"There are NaN in level {lv} at cell {cells[0]}")
-                                    raise TastesBadError("NaN Error") 
-                        else:
-                            if np.max(array) != np.nanmax(array):
-                                print(f"There are NaN in level {lv} at cell {cells[0]}")
-                        
-            # Let's add the number of box in each binary file for the level 
-            nbr_box += len(mp_read_binfile_minmax(cells[0])[0])
-
-            # Let's collect the mins and maxs of every binary file for the level 
-            mins_cell, maxs_cell = [], []
-            idx, all_mins_box, all_maxs_box = mp_read_binfile_minmax(cells[0])
-            # Ici all_mins_box c'est une liste la longueur du nombre de box dans la binary file
-            # Et chaque élément c'est les valeurs mins/maxs pour chaque field
-            # all_mins_box[100][3] c'est la valeur min dans la box 100 au niveau actuel du field avec 9
-            # l'index 3
-            if maxmin:
-                for box in all_mins_box:
-                    mins_cell.append(np.min(box))
-                all_mins_cells.append(np.min(mins_cell))
-
-                for box in all_maxs_box:
-                    maxs_cell.append(np.max(box))
-                all_maxs_cells.append(np.max(maxs_cell))
-
-            if boxes:
-                # Let's read the binary files
-                with open(cells[0], 'rb') as bfile:
-                    h = bfile.readline()
-                    # Index and shape of indiviual cells
-                    idx, shape = indexes_and_shape_from_header(h)
-                
-                # Shape according to the level header 
-                shape_header = tuple(np.append(((idx[1]-idx[0])+1),nbr_fields_header))
-
-                if not nofail:
-                    # Comparison between shapes
-                    try:
-                        raise TastesBadError((shape,shape_header))
-                    except TastesBadError as e:
-                        if e.value[0] != e.value[1]:
-                            print(f"The shapes are not the same : {e.value[0]} != {e.value[1]} at cell {cells[0]}")
-                            raise TastesBadError("Shape Error")
-                else:
-                    if shape != shape_header:
-                        print(f"The shapes are not the same : {shape} != {shape_header} at cell {cells[0]}")
-
-        if boxes:
-            if not nofail:
-                # Comparison between number of cells 
-                try:
-                    raise TastesBadError((nbr_cells_header,nbr_box))
-                except TastesBadError as e:
-                    if e.value[0] != e.value[1]:
-                        print(f"The number of cells is not the same : {e.value[0]} != {e.value[1]} at level {lv}")
-                        raise TastesBadError("Box Number Error") 
-            else:
-                if nbr_cells_header != nbr_box:
-                    print(f"The number of cells is not the same : {nbr_cells_header} != {nbr_box} at level {lv}")
-        
-        if maxmin:
-            for m in all_mins_cells:
-                if not nofail:
-                    try:
-                        raise TastesBadError((m,min_header))
-                    except TastesBadError as e:
-                        if e.value[0] < e.value[1]:
-                            print(f"Level {lv}'s min : {e.value[1]} --> not absolute because {e.value[0]} < {e.value[1]} at cell {cells[0]}")
-                            raise TastesBadError("Minimum Error") 
-                else:
-                    if m < min_header:
-                        print(f"Level {lv}'s min : {min_header} --> not absolute because {m} < {min_header} at cell {cells[0]}")
-                    
-            for m in all_maxs_cells:
-                if not nofail:
-                    try:
-                        raise TastesBadError((m,max_header))
-                    except TastesBadError as e:
-                        if e.value[0] > e.value[1]:
-                            print(f"Level {lv}'s max : {e.value[1]} --> not absolute because {e.value[0]} > {e.value[1]} at cell {cells[0]}")
-                            raise TastesBadError("Maximum Error") 
-                else:
-                    if m > max_header:
-                        print(f"Level {lv}'s max : {max_header} --> not absolute because {m} > {max_header} at cell {cells[0]}")
-        print("Done!")
-"""
