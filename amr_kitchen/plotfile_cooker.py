@@ -1,17 +1,21 @@
 import os
 import shutil
+import traceback
 import linecache
 import numpy as np
 from tqdm import tqdm
+from amr_kitchen.utils import TastesBadError
 
 
 class PlotfileCooker(object):
 
-    def __init__(self, plotfile, limit_level=None, 
-                 header_only=False, maxmins=False, ghost=False):
+    def __init__(self, plotfile, limit_level=None, header_only=False,
+                 validate_mode=False,  maxmins=False, ghost=False):
         """
         Parse the header data and save as attributes
         """
+        # TODO: Add a description of what the argument do to
+        # the docstring
         self.pfile = plotfile
         filepath = os.path.join(plotfile, 'Header')
         with open(filepath) as hfile:
@@ -48,11 +52,39 @@ class PlotfileCooker(object):
             else:
                 self.limit_level=limit_level
             # Read the box geometry
-            #if not header_only:
-            self.box_centers, self.boxes = self.read_boxes(hfile)
+            try:
+                self.box_centers, self.boxes = self.read_boxes(hfile)
+            except Exception as e:
+                # If the class is created from a Taster class
+                if validate_mode:
+                    # Get the actual exception string
+                    catched_tback = traceback.format_exc()
+                    raise TastesBadError((f"PlotfileCooker encountered a fatal"
+                                          f" exception while reading the boxes"
+                                           " coordinates in the method self.read_boxes."
+                                           " This could be due to missing or badly"
+                                           " formated box data. The exception message is:"
+                                          f" {catched_tback}"))
+                else:
+                    raise e
         # Read the cell data
         if not header_only:
-            self.cells = self.read_cell_headers(maxmins)
+            try:
+                self.cells = self.read_cell_headers(maxmins, validate_mode)
+            except Exception as e:
+                if validate_mode:
+                    catched_tback = traceback.format_exc()
+                    raise TastesBadError((f"PlotfileCooker encountered a fatal"
+                                          f" exception while reading the binary"
+                                           " paths and global grid indices in the level"
+                                           " headers, inside the method self.read_cell_headers."
+                                           " This could be due to missing or badly"
+                                           " formated box data. The exception message is:\n"
+                                          f" \n {catched_tback}"))
+                else:
+                    raise e
+        # Gets the number fields in the plt_file
+        self.nfields = len(self.fields)
         # Compute the ghost boxes map around each box
         if ghost:
             self.box_arrays, self.barr_indices = self.compute_box_array()
@@ -125,14 +157,21 @@ class PlotfileCooker(object):
             boxes.append(lv_boxes)
         return points, boxes
 
-    def read_cell_headers(self, maxmins):
+    def read_cell_headers(self, maxmins, validate_mode):
         """
-        Read the cell header data for a given level
+        Read the cell header data and the maxs/mins for a given level
         """
         cells = []
+        all_maxs = []
+        all_mins = []
         for i in range(self.limit_level + 1):
             lvcells = {}
+            all_maxs.append({})
+            all_mins.append({})
             cfile_path = os.path.join(self.pfile, self.cell_paths[i], "Cell_H")
+            if validate_mode:
+                print(('Reading box indices and binary path data from file:'
+                      f' {cfile_path}'))
             with open(cfile_path) as cfile:
                 # Skip 2 lines
                 cfile.readline()
@@ -143,7 +182,10 @@ class PlotfileCooker(object):
                 n_cells = int(cfile.readline().split()[0].replace('(', ''))
                 indexes = []
                 for _ in range(n_cells):
+                    #try:
                     start, stop, _ = cfile.readline().split()
+                    #except ValueError as e:
+                        #raise TastesBadError("")
                     start = np.array(start.replace('(', '').replace(')', '').split(','), dtype=int)
                     stop = np.array(stop.replace('(', '').replace(')', '').split(','), dtype=int)
                     indexes.append([start, stop])
@@ -217,58 +259,36 @@ class PlotfileCooker(object):
         is adjacent in a given direction the index is set
         to None
         """
-        # The ghost boxes map is defined such as
-        # for a given lv the box with index idx has
-        # the following neighbours in the coordinate
-        # coord with direction 0 (negative)
-        # neighbours = ghost_map[lv][idx][coord][0]
         ghost_map = []
-        # For each level
         for lv in range(self.limit_level + 1):
-            # All the box indices at the current level
             lvindices = self.cells[4]['indexes']
-            # All the box array indices at the current level
             lvbarr_indices = self.barr_indices[lv]
-            # Get the 3D array mapping neighbours
             box_array = self.box_arrays[lv]
-            # Create a map for each level
             lv_map = []
-            # For every index and index in the box array
             for idx, bidx in zip(lvindices, lvbarr_indices):
-                # The map for a given box is a list in each
-                # Coordinate and direction
-                ghost_boxes = [[[], []],
-                               [[], []],
-                               [[], []]]
-                # Start and stop indices in the 3D box array
+                ghost_boxes =  [[None, None], 
+                                [None, None], 
+                                [None, None]]
                 idx_lo = bidx[0]
                 idx_hi = bidx[1]
-                # For every coordinate
                 for coord in range(3):
-                    # Neighboords in direction (-) at coord
-                    # go one index lower in the box array
-                    neighbour_idx = idx_lo[coord] - 1
-                    # If not at the beginning of the domain
-                    if neighbour_idx >= 0:
-                        barr_slice = [slice(idx_lo[0], idx_hi[0] + 1),
-                                      slice(idx_lo[1], idx_hi[1] + 1),
-                                      slice(idx_lo[2], idx_hi[2] + 1)]
-                        barr_slice[coord] = neighbour_idx
-                        barr_slice = tuple(barr_slice)
-                        boxes_lo = np.unique(box_array[barr_slice].flatten())
-                        ghost_boxes[coord][0] = [bl for bl in boxes_lo if bl >= 0]
-
-                    neighbour_idx = idx_hi[coord] + 1
-                    if neighbour_idx < box_array.shape[coord]:
-                        barr_slice = [slice(idx_lo[0], idx_hi[0] + 1),
-                                      slice(idx_lo[1], idx_hi[1] + 1),
-                                      slice(idx_lo[2], idx_hi[2] + 1)]
-                        barr_slice[coord] = neighbour_idx
-                        barr_slice = tuple(barr_slice)
-                        boxes_hi = np.unique(box_array[barr_slice].flatten())
-                        ghost_boxes[coord][0] = [bl for bl in boxes_hi if bl >= 0]
+                    gidx_lo = idx_lo.copy()
+                    gidx_lo[coord] -= 1
+                    if all(gidx_lo >= 0):
+                        box_lo = box_array[gidx_lo[0],
+                                           gidx_lo[1],
+                                           gidx_lo[2]]
+                        if box_lo >= 0:
+                            ghost_boxes[coord][0] = box_lo
+                    gidx_hi = idx_hi.copy()
+                    gidx_hi[coord] += 1
+                    if all(gidx_hi < box_array.shape[coord]):
+                        box_hi = box_array[gidx_hi[0],
+                                           gidx_hi[1],
+                                           gidx_hi[2]]
+                        if box_hi >= 0:
+                            ghost_boxes[coord][1] = box_hi
                 lv_map.append(ghost_boxes)
-            lv_map = lv_map
             ghost_map.append(lv_map)
         return ghost_map
 
@@ -467,4 +487,3 @@ class PlotfileCooker(object):
         shapes = np.unique(shapes, axis=0)
         shapes = [tuple(shape) for shape in shapes]
         return shapes
-

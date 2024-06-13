@@ -1,5 +1,23 @@
 import numpy as np
 
+class TastesBadError(Exception):
+    """
+    Custom exception to tell that something
+    is wrong with a plotfile
+    """
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+# TODO: replace with more specific errors
+# depending on where the problem is
+class BadTastingHeadersError(Exception):
+    pass
+
+class BadTastingBinariesError(Exception):
+    pass                    
+
 def shape_from_header(h):
     """
     Infer the shape the box and the number of fields
