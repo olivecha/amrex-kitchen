@@ -284,5 +284,3 @@ def combine(pck1, pck2, pltout=None, vars1=None, vars2=None):
                 # Write the Level path info
                 hfile.write(f"Level_{lv}/Cell\n")
 """
-
-

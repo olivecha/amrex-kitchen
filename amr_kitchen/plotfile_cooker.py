@@ -1,17 +1,22 @@
 import os
 import shutil
+import traceback
 import linecache
 import numpy as np
 from tqdm import tqdm
+from amr_kitchen.utils import TastesBadError
 
 
 class PlotfileCooker(object):
 
-    def __init__(self, plotfile, limit_level=None, 
-                 header_only=False, maxmins=False, ghost=False):
+    def __init__(self, plotfile, limit_level=None, header_only=False,
+                 validate_mode=False, header_only=False, maxmins=False,
+                 ghost=False):
         """
         Parse the header data and save as attributes
         """
+        # TODO: Add a description of what the argument do to
+        # the docstring
         self.pfile = plotfile
         filepath = os.path.join(plotfile, 'Header')
         with open(filepath) as hfile:
@@ -48,11 +53,39 @@ class PlotfileCooker(object):
             else:
                 self.limit_level=limit_level
             # Read the box geometry
-            #if not header_only:
-            self.box_centers, self.boxes = self.read_boxes(hfile)
+            try:
+                self.box_centers, self.boxes = self.read_boxes(hfile)
+            except Exception as e:
+                # If the class is created from a Taster class
+                if validate_mode:
+                    # Get the actual exception string
+                    catched_tback = traceback.format_exc()
+                    raise TastesBadError((f"PlotfileCooker encountered a fatal"
+                                          f" exception while reading the boxes"
+                                           " coordinates in the method self.read_boxes."
+                                           " This could be due to missing or badly"
+                                           " formated box data. The exception message is:"
+                                          f" {catched_tback}"))
+                else:
+                    raise e
         # Read the cell data
         if not header_only:
-            self.cells = self.read_cell_headers(maxmins)
+            try:
+                self.cells = self.read_cell_headers(maxmins, validate_mode)
+            except Exception as e:
+                if validate_mode:
+                    catched_tback = traceback.format_exc()
+                    raise TastesBadError((f"PlotfileCooker encountered a fatal"
+                                          f" exception while reading the binary"
+                                           " paths and global grid indices in the level"
+                                           " headers, inside the method self.read_cell_headers."
+                                           " This could be due to missing or badly"
+                                           " formated box data. The exception message is:\n"
+                                          f" \n {catched_tback}"))
+                else:
+                    raise e
+        # Gets the number fields in the plt_file
+        self.nfields = len(self.fields)
         # Compute the ghost boxes map around each box
         if ghost:
             self.box_arrays, self.barr_indices = self.compute_box_array()
@@ -125,14 +158,21 @@ class PlotfileCooker(object):
             boxes.append(lv_boxes)
         return points, boxes
 
-    def read_cell_headers(self, maxmins):
+    def read_cell_headers(self, maxmins, validate_mode):
         """
-        Read the cell header data for a given level
+        Read the cell header data and the maxs/mins for a given level
         """
         cells = []
+        all_maxs = []
+        all_mins = []
         for i in range(self.limit_level + 1):
             lvcells = {}
+            all_maxs.append({})
+            all_mins.append({})
             cfile_path = os.path.join(self.pfile, self.cell_paths[i], "Cell_H")
+            if validate_mode:
+                print(('Reading box indices and binary path data from file:'
+                      f' {cfile_path}'))
             with open(cfile_path) as cfile:
                 # Skip 2 lines
                 cfile.readline()
@@ -143,7 +183,10 @@ class PlotfileCooker(object):
                 n_cells = int(cfile.readline().split()[0].replace('(', ''))
                 indexes = []
                 for _ in range(n_cells):
+                    #try:
                     start, stop, _ = cfile.readline().split()
+                    #except ValueError as e:
+                        #raise TastesBadError("")
                     start = np.array(start.replace('(', '').replace(')', '').split(','), dtype=int)
                     stop = np.array(stop.replace('(', '').replace(')', '').split(','), dtype=int)
                     indexes.append([start, stop])
@@ -180,7 +223,7 @@ class PlotfileCooker(object):
                     lvcells['mins'][field] = minvals
                     lvcells['maxs'][field] = maxvals
             cells.append(lvcells)
-        return cells
+        return cells, all_mins, all_maxs
 
     def compute_box_array(self):
         """
@@ -428,4 +471,3 @@ class PlotfileCooker(object):
         shapes = np.unique(shapes, axis=0)
         shapes = [tuple(shape) for shape in shapes]
         return shapes
-

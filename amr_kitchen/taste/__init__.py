@@ -1,0 +1,1 @@
+from .taste import Taster
