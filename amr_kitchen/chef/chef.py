@@ -317,7 +317,7 @@ class Chef(PlotfileCooker):
 
     cookfields = {'HRR': "HeatRelease",
                   'ENT': "Enthalpy",
-                  'SRi': "IR",
+                  'SRi': "IRm",
                   'RRi': "R",
                   'SDi': "DI",}
 

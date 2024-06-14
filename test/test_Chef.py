@@ -61,8 +61,8 @@ class TestSlice(unittest.TestCase):
                                "Header")) as hfile:
             hfile.readline()
             hfile.readline()
-            self.assertTrue("IR(O2)" in hfile.readline())
-            self.assertTrue("IR(H2)" in hfile.readline())
+            self.assertTrue("IRm(O2)" in hfile.readline())
+            self.assertTrue("IRm(H2)" in hfile.readline())
 
         shutil.rmtree(os.path.join("test","chef_test_Ri"))
 
