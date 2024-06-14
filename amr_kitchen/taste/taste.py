@@ -113,7 +113,7 @@ class Taster(PlotfileCooker):
             lv_files = os.listdir(os.path.join(self.pfile,
                                                self.cell_paths[lv]))
             for bfile_path in np.unique(self.cells[lv]['files']):
-                bfile = os.path.split(bfile_path)[0]
+                bfile = os.path.split(bfile_path)[-1]
                 if bfile not in lv_files:
                     raise TastesBadError(f"Missing file {bfile} at Level {lv}")
 
