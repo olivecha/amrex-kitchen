@@ -2,7 +2,8 @@ import os
 import time
 import numpy as np
 import argparse
-from amr_kitchen.taste import Taster
+from .taste import Taster
+from tqdm import tqdm
 
 
 def main():
