@@ -94,6 +94,7 @@ class Taster(PlotfileCooker):
         """
         # Checking if all box coordinates match
         # The indexes in the level headers
+        self.taste_plotfile_structure()
         if self.coordinates:
             self.taste_box_coordinates()
         if self.boxes_maxmin:
