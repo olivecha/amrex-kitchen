@@ -29,6 +29,7 @@ setuptools.setup(
             "spoon = amr_kitchen.spoon.cli:main",
             "taste = amr_kitchen.taste.cli:main",
             "chef = amr_kitchen.chef.cli:main",
+            "menu = amr_kitchen.menu.cli:main",
         ]
     }
 )
