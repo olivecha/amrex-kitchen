@@ -4,3 +4,4 @@ from . import colander
 from . import spoon
 from . import chef
 from . import taste
+from . import combine

@@ -8,23 +8,7 @@ import numpy as np
 from tqdm import tqdm
 from amr_kitchen import PlotfileCooker
 from amr_kitchen.utils import TastesBadError
-
-# This should live somewhere
-def indexes_and_shape_from_header(header):
-    """
-    This takes the byte string of a box header in a plotfile binary
-    file and infers the indexes of the box and the number of fields
-    in the plotfile
-    """
-    h = header.decode('ascii')
-    start, stop, _, nfields = h.split()[-4:]
-    nfields = int(nfields)
-    start = np.array(start.split('(')[-1].replace(')','').split(','), dtype=int)
-    stop = np.array(stop.replace('(', '').replace(')', '').split(','), dtype=int)
-    shape = stop - start + 1
-    shape = [s for s in shape]
-    shape.append(nfields)
-    return [start, stop], tuple(shape)
+from amr_kitchen.utils import indexes_and_shape_from_header
 
 # The prototype of this should also live somewhere as 
 # it is faster than how binary files are read in colander.py
@@ -52,26 +36,12 @@ def mp_read_binfile_minmax(args):
                 break
     return indexes, min_vals, max_vals
 
-def shapes_from_header(header,ndim):
-    h = header.decode("ascii")
-    start, stop, _, nfields = h.split()[-4:]
-    nfields = int(nfields)
-    start = np.array(start.split('(')[-1].replace(')','').split(','), dtype=int)
-    stop = np.array(stop.replace('(', '').replace(')','').split(','), dtype=int)
-    shape = stop - start + 1
-    total_shape = []
-    for i in range(ndim):
-        total_shape.append(shape[i])
-    total_shape.append(nfields)
-    return total_shape
-
-
 class Taster(PlotfileCooker):
     """
     A class to test the validity of AMReX plotfiles
     """
     def __init__(self, plt_file, limit_level=None, boxes=True, 
-                 maxmin=True, coordinates=True, nan=True, 
+                 maxmin=True, coordinates=True, nan=False, 
                  nofail=False):
         """
         Constructor for the plotfile tester
@@ -124,6 +94,7 @@ class Taster(PlotfileCooker):
         """
         # Checking if all box coordinates match
         # The indexes in the level headers
+        self.taste_plotfile_structure()
         if self.coordinates:
             self.taste_box_coordinates()
         if self.boxes_maxmin:
@@ -133,6 +104,18 @@ class Taster(PlotfileCooker):
         if self.boxes_bounds:
             self.taste_for_box_shapes_in_binairies()
         print("\nDone!")
+
+    def taste_plotfile_structure(self):
+        """
+        Check that no binary file is missing
+        """
+        for lv in range(self.limit_level + 1):
+            lv_files = os.listdir(os.path.join(self.pfile,
+                                               self.cell_paths[lv]))
+            for bfile_path in np.unique(self.cells[lv]['files']):
+                bfile = os.path.split(bfile_path)[-1]
+                if bfile not in lv_files:
+                    raise TastesBadError(f"Missing file {bfile} at Level {lv}")
 
     def taste_box_coordinates(self):
         """
@@ -255,7 +238,7 @@ class Taster(PlotfileCooker):
                     # METTRE While True to read all boxes !!
                     # Ici, on en lit juste une
                     h = bfile.readline()
-                    tshape = shapes_from_header(h,self.ndims)
+                    tshape = shapes_from_header_vardims(h,self.ndims)
                     arr = np.fromfile(bfile, "float64", np.prod(tshape))
                     arr = arr.reshape(tshape,order="F")
                     
