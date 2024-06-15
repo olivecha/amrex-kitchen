@@ -10,8 +10,6 @@ from tqdm import tqdm
 
 from amr_kitchen import PlotfileCooker
 
-# TODO: not sure this needs to be a class
-# could be a single script parsing the arguments 
 class Menu(PlotfileCooker):
     """
     A class to read fields and species of a plotfile
@@ -31,54 +29,56 @@ class Menu(PlotfileCooker):
 
         # Database in {Acronym: (Regular Expression, Definition)} format
         self.field_info = {"velocity": (r"^\w+_velocity$",
-                                        "Velocity [units]"),
+                                        "Velocity [m/s]"),
                             "density": (r"^density$",
-                                        "Density [units]"),
+                                        "Density [kg/m^3]"),
                             "rhoh": (r"^rhoh$",
-                                     "... [units]"),
+                                     "Density * Specific Enthalpy [J / m^3]"),
                             "temp": (r"^temp$",
-                                     "Temperature [units]"),
+                                     "Temperature [K]"),
                             "RhoRT": (r"^RhoRT$",
-                                      "... [units]"),
+                                      "Density * (R / M_bar) * Temperature [Pa]"),
                             "divu": (r"^divu$",
-                                     "... [units]"),
+                                     "Divergence of the velocity field [1 / s]"),
                             "gradp": (r"^gradp+\w$",
-                                      "... [units]"),
+                                      "Local pressure gradient [Pa / m]"),
                             "I_R": (r"^I_R\(.+\)$",
                                     "Species reaction rates [kg / s m^3]"),
                             "FunctCall": (r"^FunctCall$",
-                                          "... [units]"),
+                                          "Number of function calls to chemistry [-]"),
                             "HeatRelease": (r"^HeatRelease$",
-                                            "Heat release rate from chem. reactions [W / s m^3]"),
+                                            "Heat release rate from chem. reactions [W / m^3]"),
                             "avg_pressure": (r"^avg_pressure$",
-                                             "Average Pressure [units]"),
+                                             "Cell-averaged pressure from the node-centers [Pa]"),
                             "mag_vort": (r"^mag_vort$",
-                                         "Vorticity magnitude [units]"),
-                            "Y": (r"^Y\(.+\)$","... [units]"),
+                                         "Vorticity magnitude [1 / s]"),
+                            "Y": (r"^Y\(.+\)$","Species mass fractions [-]"),
                             "mass_fractions": (r"^mass_fractions$",
-                                               "Species mass fractions [units]"),
+                                               "Species mass fractions [-]"),
+                            "X": (r"^X\(.+\)$","Species mole fractions [-]"),
                             "mole_fraction": (r"^mole_fraction$",
-                                              "Species mole fractions [units]"),
+                                              "Species mole fractions [-]"),
                             "diffcoeff": (r"^diffcoeff$",
-                                          "Species mixture-averaged diffusion coefficients [units]"),
+                                          "Mixture-averaged diffusion coefficients (mass) [m^2/s]"),
                             "lambda": (r"^lambda$",
-                                       "Thermal diffusivity [units]"),
+                                       "Thermal diffusivity [W / m / K]"),
                             "viscosity": (r"^viscosity$",
-                                          "Mixture viscosity [units]"),
+                                          "Mixture viscosity [Pa-s]"),
                             "mixture_fraction": (r"^mixture_fraction$",
-                                                 "Mixture fraction based on Bilger’s element formulation [units]"),
+                                                 "Mixture fraction based on Bilger’s formulation [-]"),
                             "progress_variable": (r"^progress_variable$",
-                                                  "Progress variable based on a linear combination of Ys, T [units]"),
-                            "avg_pressure": (r"^avg_pressure$",
-                                             "Cell-averaged pressure [units]"),
+                                                  "User defined progress variable [-]"),
                             "vorticity": (r"^vorticity$",
-                                          "VortZ (2D) or VortX, VortY, VortZ (3D) [units]"),
-                            "Qcrit": (r"^Qcrit$","Q-Criterion [units]"),
+                                          "Vortricity components [1 / s]"),
+                            "Qcrit": (r"^Qcrit$","Q-Criterion [-]"),
                             "kinetic_energy": (r"^kinetic_energy$",
-                                               "Kinetic energy [units]"),
-                            "enstrophy": (r"^enstrophy$","Enstrophy [units]"),
-                            "rhominsumrhoY": (r"^rhominsumrhoY$",
-                                              "Rho minus sum of rhoYs [units]"),
+                                               "Kinetic energy as 0.5 * Rho * |U^2| [kg / m s^2]"),
+                            "enstrophy": (r"^enstrophy$",
+                                          "Enstrophy as 0.5 * Rho * |omega^2| [kg / m s^2]"),
+                            #"rhominsumrhoY": (r"^rhominsumrhoY$",
+                            #                  "Rho minus sum of rhoYs [units]"),
+                            "volFrac": (r"^volFrac$",
+                                         "Volume fraction at embedded boundaries [-]"),
                             "DistributionMap": (r"^DistributionMap$",
                                                 "The MPI-rank of each box [units]"),
                             }
@@ -86,12 +86,7 @@ class Menu(PlotfileCooker):
 
         self.menu()
 
-    # TODO: I guess a class is okay if you do it like this
-    # It'll prevent having a 200+ lines function which is
-    # not ideal
     def menu(self):
-        # TODO: the nice formatting I was talking about:
-        # Check if there is a field defined for multiple species
         """if self.has_mass_fracs:
             # Get the length of the string of each species
             sp_lens = [len(sp) for sp in Y_species]
