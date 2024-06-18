@@ -14,7 +14,14 @@ class Menu(PlotfileCooker):
     """
     A class to read fields and species of a plotfile
     """
+    # TODO: Mets la variable "field_info" ici
+    # field_info = {...}
+    # Elle va s'ajouter a chaque classe vu que c'est un attribut
+    # qui change pas
 
+    # TODO: Je pense pas c'est nécessaire de mettre l'option de pas show les
+    # Variables ou les species ça rentre pas mal toujours dans une fenêtre de
+    # terminal. Ça serait bien de pouvoir enlever les descriptions par contre
     def __init__(self, plt_file, variables=True, species=True, has_var=False):
         """
         Constructor for the Menu
@@ -27,6 +34,10 @@ class Menu(PlotfileCooker):
         self.has_var = has_var
 
         super().__init__(plt_file,)
+        # TODO: Fais le __init__ header_only=True pour pas lire tout les
+        # Cell_H juste pour avoir le nom des fields
+        # Le best ça serait de pas créer de PlotfileCooker instance et
+        # juste lire les lignes avec les fields dans plt00000/Header
 
         # Database in {Acronym: (Regular Expression, Definition)} format
         self.field_info = {"velocity": (r"^\w+_velocity$",
@@ -88,6 +99,8 @@ class Menu(PlotfileCooker):
         self.menu()
 
     def menu(self):
+        # TODO: Remove stuff like this this is what git is for
+        # Its still gonna be in the version history if you need it
         """if self.has_mass_fracs:
             # Get the length of the string of each species
             sp_lens = [len(sp) for sp in Y_species]
@@ -104,13 +117,14 @@ class Menu(PlotfileCooker):
             # block i.e. the last lines has close to the number for each line
             # Its gonna be some logic with % and // operators"""
 			
+            # TODO: Remove this
 			#Could be different be *creative*
 			#$____________________ Plotfile Menu ____________________$
 			#HeatRelease       : Heat Release rate [W / s m^3]
 			#progress_variable : User defined reaction progress
 			#I_R               : Species reaction rates [kg / s m^3
-			
 
+        # TODO: Voir comment au dessus de __init__
         if self.variables:
             self.variables_finder()
         if self.species:
