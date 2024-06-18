@@ -95,3 +95,19 @@ def shapes_from_header_vardims(header, ndim):
         total_shape.append(shape[i])
     total_shape.append(nfields)
     return total_shape
+
+def global2local(indices, refindices, n_ghost=1):
+    """
+    Convert global box indexes to indexes in a
+    ghost cell padded reference box
+    """
+    i_start = max(refindices[0][0] - n_ghost, 0)
+    j_start = max(refindices[0][1] - n_ghost, 0)
+    k_start = max(refindices[0][2] - n_ghost, 0)
+    return [[indices[0][0] - i_start,
+             indices[0][1] - j_start,
+             indices[0][2] - k_start],
+            [indices[1][0] - i_start,
+             indices[1][1] - j_start,
+             indices[1][2] - k_start]]
+
