@@ -15,7 +15,7 @@ class Menu(PlotfileCooker):
     A class to read fields and species of a plotfile
     """
 
-    def __init__(self, plt_file, variables=True, species=True,):
+    def __init__(self, plt_file, variables=True, species=True, has_var=False):
         """
         Constructor for the Menu
         """
@@ -24,6 +24,7 @@ class Menu(PlotfileCooker):
         self.plt_file = plt_file
         self.variables = variables
         self.species = species
+        self.has_var = has_var
 
         super().__init__(plt_file,)
 
@@ -115,7 +116,76 @@ class Menu(PlotfileCooker):
         if self.species:
             self.species_finder()
     
+    def show_variables(self, list_variables):
+        # Let's print the Fields
+        # Finding the maximum lenght of printed lines
+        if self.has_var:
+            len_of_fields = [len(key) for key in self.field_info]
+            len_of_description = [len(self.field_info[key][1]) for key in self.field_info]
+            yes_no = []
+            for key in self.field_info:
+                if key in list_variables:
+                    yes_no.append("(Yes)")
+                else:
+                    yes_no.append("(No)")
+        else:
+            descriptions = []
+            len_of_fields = [len(field) for field in list_variables]
+            for field in list_variables:
+                descriptions.append(self.field_info[field][1])
+            len_of_description = [len(description) for description in descriptions]
 
+        max_field = np.max(len_of_fields)  
+        max_description = np.max(len_of_description)
+        total_lenght = max_field + max_description + 2 
+        if self.has_var:
+            total_lenght += len("(yes)")
+            title = "\n" + ((total_lenght//3)+2)*(" ")+"All known fields:"
+        else:
+            title = "\n" + (total_lenght//3)*(" ")+"Fields found in file:"
+        cap = "+"+("-"*total_lenght)+"+"
+        print(title)
+        print(cap)
+        # Printing out the Fields on the menu
+        if self.has_var:
+            print("Name"+" "*((max_field-len_of_fields[1])+3)+" "+"Present"+" "*2+"Description")
+            print(cap)
+            for i in range(len(list(self.field_info))):
+                name = list(self.field_info)[i]
+                spacing = (max_field-len_of_fields[i]) + 2 
+                if yes_no[i] == "(yes)":
+                    spacing -= 1
+                description = self.field_info[name][1]
+                print(name+(" ")*spacing+yes_no[i]+" : "+description)
+        else:
+            print("Name"+" "*((max_field-len_of_fields[1])+6)+"Description")
+            print(cap)
+            for i in range(len(list_variables)):
+                name = list_variables[i]
+                spacing = max_field-len_of_fields[i]
+                description = self.field_info[name][1]
+                print(name+(" ")*spacing+" : "+description)
+        print(cap+"\n")
+
+    def show_species(self, list_species):
+        # Let's print the Species
+        # Get the length of the string of each species
+        sp_lens = [len(sp) for sp in list_species]
+        # Amount of spaces padding so each string is the 
+        # same length if max(sp_lens) = 3:
+        # "CH4" stays the same "H" becomes "H  "
+        pad = [l + (max(sp_lens) - l) for l in sp_lens]
+        sp_padded = [f"{sp: <{p}}" for sp, p in zip(list_species, pad)]
+        sp_lines = [' '.join(sp_padded[i:i+8]) for i in range(0, len(sp_padded), 8)]
+        line_lenght = len(sp_lines[0])
+        cap = "+"+("-"*(line_lenght-2))+"+"
+        title = "\n" + (line_lenght//3)*(" ")+"Species found in file:"
+        # Printing out the Species on the menu
+        print(title)
+        print(cap)
+        for l in sp_lines:
+            print(l) 
+        print(cap+"\n")
 
     def variables_finder(self):
         # Let's find all the fields in the plot file
@@ -133,30 +203,7 @@ class Menu(PlotfileCooker):
             else:
                 if field not in list_fields:
                     list_fields.append(field)
-
-        # Finding the maximum lenght of printed lines
-        len_of_fields = [len(field) for field in list_fields]
-        descriptions = []
-        for field in list_fields:
-            descriptions.append(self.field_info[field][1])
-        len_of_description = [len(description) for description in descriptions]
-
-        max_field = np.max(len_of_fields)  
-        max_description = np.max(len_of_description)
-        total_lenght = max_field + max_description + 2 
-
-        title = "\n" + (total_lenght//3)*(" ")+"Fields found in file:"
-        cap = "+"+("-"*total_lenght)+"+"
-        print(title)
-        print(cap)
-        # Printing out the Fields on the menu
-        for i in range(len(list_fields)):
-            name = list_fields[i]
-            spacing = max_field-len_of_fields[i]
-            descriptions = self.field_info[name][1]
-            print(name+(" ")*spacing+" : "+descriptions)
-        print(cap+"\n")
-
+        self.show_variables(list_fields)
     
     def species_finder(self):
         Y_species = []
@@ -166,24 +213,9 @@ class Menu(PlotfileCooker):
         Y_species = [re.sub(r"^Y\(", '', sp) for sp in Y_species]
         Y_species = [re.sub(r"\)$", '', sp) for sp in Y_species]
         Y_species.sort()
+        self.show_species(Y_species)
 
-        # Get the length of the string of each species
-        sp_lens = [len(sp) for sp in Y_species]
-        # Amount of spaces padding so each string is the 
-        # same length if max(sp_lens) = 3:
-        # "CH4" stays the same "H" becomes "H  "
-        pad = [l + (max(sp_lens) - l) for l in sp_lens]
-        sp_padded = [f"{sp: <{p}}" for sp, p in zip(Y_species, pad)]
-        sp_lines = [' '.join(sp_padded[i:i+8]) for i in range(0, len(sp_padded), 8)]
-        line_lenght = len(sp_lines[0])
-        cap = "+"+("-"*(line_lenght-2))+"+"
-        title = "\n" + (line_lenght//3)*(" ")+"Species found in file:"
-        # Printing out the Species on the menu
-        print(title)
-        print(cap)
-        for l in sp_lines:
-            print(l) 
-        print(cap+"\n")
+        
 
 
 

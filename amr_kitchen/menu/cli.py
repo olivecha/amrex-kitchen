@@ -21,6 +21,10 @@ def main():
     parser.add_argument(
             "--species", "-s", action='store_false',
             help="Flag to disable showing the species in the plotfile")
+    
+    parser.add_argument(
+            "--has_var", "-hv", action='store_true',
+            help="Flag to enable showing all the fields in the database and if they are the plotfile or not")
 
 
     args = parser.parse_args()
@@ -33,7 +37,8 @@ def main():
     # Colander object
     Menu(plt_file=args.plotfile,
          variables=args.fields,
-         species=args.species,)
+         species=args.species,
+         has_var=args.has_var,)
 
 if __name__ == "__main__":
     main()
