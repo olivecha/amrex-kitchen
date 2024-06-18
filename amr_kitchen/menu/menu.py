@@ -70,7 +70,7 @@ class Menu(PlotfileCooker):
                             "X": (r"^X\(.+\)$","Species mole fractions [-]"),
                             "mole_fraction": (r"^mole_fraction$",
                                               "Species mole fractions [-]"),
-                            "diffcoeff": (r"^diffcoeff$",
+                            "diffcoeff": (r"^D_+.",
                                           "Mixture-averaged diffusion coefficients (mass) [m^2/s]"),
                             "lambda": (r"^lambda$",
                                        "Thermal diffusivity [W / m / K]"),
@@ -126,9 +126,11 @@ class Menu(PlotfileCooker):
 
         # TODO: Voir comment au dessus de __init__
         if self.variables:
-            self.variables_finder()
+            variables = self.variables_finder()
+            self.show_variables(variables)
         if self.species:
-            self.species_finder()
+            species = self.species_finder()
+            self.show_species(species)
     
     def show_variables(self, list_variables):
         # Let's print the Fields
@@ -139,9 +141,9 @@ class Menu(PlotfileCooker):
             yes_no = []
             for key in self.field_info:
                 if key in list_variables:
-                    yes_no.append("(Yes)")
+                    yes_no.append("Yes")
                 else:
-                    yes_no.append("(No)")
+                    yes_no.append(" No")
         else:
             descriptions = []
             len_of_fields = [len(field) for field in list_variables]
@@ -153,7 +155,7 @@ class Menu(PlotfileCooker):
         max_description = np.max(len_of_description)
         total_lenght = max_field + max_description + 2 
         if self.has_var:
-            total_lenght += len("(yes)")
+            total_lenght += 3
             title = "\n" + ((total_lenght//3)+2)*(" ")+"All known fields:"
         else:
             title = "\n" + (total_lenght//3)*(" ")+"Fields found in file:"
@@ -162,17 +164,15 @@ class Menu(PlotfileCooker):
         print(cap)
         # Printing out the Fields on the menu
         if self.has_var:
-            print("Name"+" "*((max_field-len_of_fields[1])+3)+" "+"Present"+" "*2+"Description")
+            print("Name"+" "*((max_field-len_of_fields[1])+2)+" "+"Present"+" Description")
             print(cap)
             for i in range(len(list(self.field_info))):
                 name = list(self.field_info)[i]
-                spacing = (max_field-len_of_fields[i]) + 2 
-                if yes_no[i] == "(yes)":
-                    spacing -= 1
+                spacing = (max_field-len_of_fields[i]) + 2
                 description = self.field_info[name][1]
                 print(name+(" ")*spacing+yes_no[i]+" : "+description)
         else:
-            print("Name"+" "*((max_field-len_of_fields[1])+6)+"Description")
+            print("Name"+" "*(max_field-len("Name"))+" "*3+"Description")
             print(cap)
             for i in range(len(list_variables)):
                 name = list_variables[i]
@@ -217,21 +217,16 @@ class Menu(PlotfileCooker):
             else:
                 if field not in list_fields:
                     list_fields.append(field)
-        self.show_variables(list_fields)
+                    self.field_info[field] = (field, "Units unknown [...]")
+        return list_fields
     
     def species_finder(self):
         Y_species = []
         for field in self.fields:
             if self.regexp_species.search(field):
-                 Y_species.append(field)
+                 Y_species.append(field) 
+        # Et s'il n'y a aucun Field Y(...) dans la plotfile ? 
         Y_species = [re.sub(r"^Y\(", '', sp) for sp in Y_species]
         Y_species = [re.sub(r"\)$", '', sp) for sp in Y_species]
         Y_species.sort()
-        self.show_species(Y_species)
-
-        
-
-
-
-
-
+        return Y_species
