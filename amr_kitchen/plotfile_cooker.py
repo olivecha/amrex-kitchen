@@ -259,37 +259,30 @@ class PlotfileCooker(object):
         is adjacent in a given direction the index is set
         to None
         """
-        ghost_map = []
+		ghost_map = []
         for lv in range(self.limit_level + 1):
-            lvindices = self.cells[4]['indexes']
-            lvbarr_indices = self.barr_indices[lv]
-            box_array = self.box_arrays[lv]
-            lv_map = []
-            for idx, bidx in zip(lvindices, lvbarr_indices):
-                ghost_boxes =  [[None, None], 
-                                [None, None], 
-                                [None, None]]
-                idx_lo = bidx[0]
-                idx_hi = bidx[1]
-                for coord in range(3):
-                    gidx_lo = idx_lo.copy()
-                    gidx_lo[coord] -= 1
-                    if all(gidx_lo >= 0):
-                        box_lo = box_array[gidx_lo[0],
-                                           gidx_lo[1],
-                                           gidx_lo[2]]
-                        if box_lo >= 0:
-                            ghost_boxes[coord][0] = box_lo
-                    gidx_hi = idx_hi.copy()
-                    gidx_hi[coord] += 1
-                    if all(gidx_hi < box_array.shape[coord]):
-                        box_hi = box_array[gidx_hi[0],
-                                           gidx_hi[1],
-                                           gidx_hi[2]]
-                        if box_hi >= 0:
-                            ghost_boxes[coord][1] = box_hi
-                lv_map.append(ghost_boxes)
-            ghost_map.append(lv_map)
+            lv_gmap = []
+            for box_index, indices in enumerate(self.barr_indices[lv]):
+                gmap = [[[], []], [[], []], [[], []]]
+                for coo in range(3):
+                    idx_lo = np.copy(indices)
+                    idx_lo[0][coo] = max(idx_lo[0][coo] - 1, 0)
+                    for bid in np.unique(pck.box_arrays[lv][idx_lo[0][0]:idx_lo[1][0],
+                                                            idx_lo[0][1]:idx_lo[1][1],
+                                                            idx_lo[0][2]:idx_lo[1][2]]):
+                        if bid != box_index:
+                            gmap[coo][0].append(bid)
+
+                    idx_hi = np.copy(indices)
+                    idx_hi[1] += 1
+                    idx_hi[1][coo] = min(idx_hi[1][coo] + 1, barr_shape[coo] - 1)
+                    for bid in np.unique(pck.box_arrays[lv][idx_hi[0][0]:idx_hi[1][0],
+                                                            idx_hi[0][1]:idx_hi[1][1],
+                                                            idx_hi[0][2]:idx_hi[1][2]]):
+                        if bid != box_index:
+                            gmap[coo][1].append(bid)
+                lv_gmap.append(gmap)
+            ghost_map.append(lv_gmap)
         return ghost_map
 
     def field_index(self, field):
