@@ -253,7 +253,7 @@ class PlotfileCooker(object):
 
     def compute_ghost_map(self):
         """
-        This computes indices of the boxes adjacent 
+        This computes indices of the boxes adjacent
         to a given box. Indices have shape 3x2 for the
         low and high faces of every dimension. If no box
         is adjacent in a given direction the index is set
@@ -326,6 +326,23 @@ class PlotfileCooker(object):
             yield (bf,
                    offsets[bf_indexes],
                    indexes[bf_indexes],)
+
+    def bybinfile_indexed(self, lv):
+        """
+        Iterate over header data at lv
+        by individual binary files
+        """
+        bfiles = np.array(self.cells[lv]['files'])
+        indexes = np.array(self.cells[lv]['indexes'])
+        offsets = np.array(self.cells[lv]['offsets'])
+
+        box_indexes = np.arange(len(bfiles))
+        for bf in np.unique(bfiles):
+            bf_indexes = box_indexes[bfiles == bf]
+            yield (bf,
+                   offsets[bf_indexes],
+                   indexes[bf_indexes],
+                   box_indexes)
 
     def bybox(self, lv):
         """

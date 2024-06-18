@@ -35,9 +35,10 @@ def shape_from_header(h):
 
 def indices_from_header(h):
     """
-    Infer the global indices of the box
+    Infer the shape the box and the number of fields
     from the header in a plotfile binary file
-    h: string of the header line
+    (Only works for 3D plotfiles)
+    header: bytestring of the header line
     """
     start, stop, _, nfields = h.split()[-4:]
     nfields = int(nfields)
@@ -94,4 +95,3 @@ def shapes_from_header_vardims(header, ndim):
         total_shape.append(shape[i])
     total_shape.append(nfields)
     return total_shape
-
