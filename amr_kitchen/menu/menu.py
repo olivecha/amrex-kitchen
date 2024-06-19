@@ -16,70 +16,70 @@ class Menu():
     """
     # Database in {Acronym: (Regular Expression, Definition)} format
     field_info = {"avg_pressure": (r"^avg_pressure$",
-                                                "Cell-averaged pressure from the node-centers [Pa]"),
+                                    "Cell-averaged pressure from the node-centers [Pa]"),
                 "density": (r"^density$",
-                                            "Density [kg/m^3]"),
+                             "Density [kg/m^3]"),
                 "diffcoeff": (r"^D_+.",
-                                            "Mixture-averaged diffusion coefficients (mass) [m^2/s]"),
+                               "Mixture-averaged diffusion coefficients (mass) [m^2/s]"),
                 "DistributionMap": (r"^DistributionMap$",
-                                                    "The MPI-rank of each box [units]"),
+                                     "The MPI-rank of each box [units]"),
                 "divu": (r"^divu$",
-                                        "Divergence of the velocity field [1 / s]"),
+                          "Divergence of the velocity field [1 / s]"),
                 "enstrophy": (r"^enstrophy$",
-                                            "Enstrophy as 0.5 * Rho * |omega^2| [kg / m s^2]"),
+                               "Enstrophy as 0.5 * Rho * |omega^2| [kg / m s^2]"),
                 "FunctCall": (r"^FunctCall$",
-                                            "Number of function calls to chemistry [-]"),
+                               "Number of function calls to chemistry [-]"),
                 "gradp": (r"^gradp+\w$",
-                                        "Local pressure gradient [Pa / m]"),
+                           "Local pressure gradient [Pa / m]"),
                 "HeatRelease": (r"^HeatRelease$",
-                                                "Heat release rate from chem. reactions [W / m^3]"),
+                                 "Heat release rate from chem. reactions [W / m^3]"),
                 "I_R": (r"^I_R\(.+\)$",
-                                        "Species reaction rates [kg / s m^3]"),
+                         "Species reaction rates [kg / s m^3]"),
                 "kinetic_energy": (r"^kinetic_energy$",
-                                                "Kinetic energy as 0.5 * Rho * |U^2| [kg / m s^2]"),
+                                    "Kinetic energy as 0.5 * Rho * |U^2| [kg / m s^2]"),
                 "lambda": (r"^lambda$",
-                                        "Thermal diffusivity [W / m / K]"),
+                            "Thermal diffusivity [W / m / K]"),
                 "mag_vort": (r"^mag_vort$",
-                                            "Vorticity magnitude [1 / s]"),
+                              "Vorticity magnitude [1 / s]"),
                 "mass_fractions": (r"^mass_fractions$",
-                                            "Species mass fractions [-]"),
+                                    "Species mass fractions [-]"),
                 "mixture_fraction": (r"^mixture_fraction$",
-                                                    "Mixture fraction based on Bilger’s formulation [-]"),
+                                      "Mixture fraction based on Bilger’s formulation [-]"),
                 "mole_fraction": (r"^mole_fraction$",
-                                                "Species mole fractions [-]"),
+                                   "Species mole fractions [-]"),
                 "progress_variable": (r"^progress_variable$",
-                                                    "User defined progress variable [-]"),
+                                       "User defined progress variable [-]"),
                 "Qcrit": (r"^Qcrit$",
-                                                "Q-Criterion [-]"),
+                           "Q-Criterion [-]"),
                 "rhoh": (r"^rhoh$",
-                                        "Density * Specific Enthalpy [J / m^3]"),
-                #"rhominsumrhoY": (r"^rhominsumrhoY$",
-                #                  "Rho minus sum of rhoYs [units]"),
+                          "Density * Specific Enthalpy [J / m^3]"),
                 "RhoRT": (r"^RhoRT$",
-                                        "Density * (R / M_bar) * Temperature [Pa]"),
+                           "Density * (R / M_bar) * Temperature [Pa]"),
                 "temp": (r"^temp$",
-                                        "Temperature [K]"),
+                          "Temperature [K]"),
                 "velocity": (r"^\w+_velocity$",
-                                            "Velocity [m/s]"),
+                              "Velocity [m/s]"),
                 "viscosity": (r"^viscosity$",
-                                            "Mixture viscosity [Pa-s]"),
+                               "Mixture viscosity [Pa-s]"),
                 "volFrac": (r"^volFrac$",
-                                            "Volume fraction at embedded boundaries [-]"),
+                             "Volume fraction at embedded boundaries [-]"),
                 "vorticity": (r"^vorticity$",
-                                            "Vortricity components [1 / s]"),
+                               "Vortricity components [1 / s]"),
                 "X": (r"^X\(.+\)$",
-                                            "Species mole fractions [-]"),
+                       "Species mole fractions [-]"),
                 "Y": (r"^Y\(.+\)$",
-                                            "Species mass fractions [-]"),
-                    
-                    }
+                       "Species mass fractions [-]"),}
 
     def __init__(self, plt_file, has_var=None, all=False, description=False):
+        # TODO: add information on the input arguments especially
+        # important for the __init__ functions as its what appears
+        # when you do help(Menu)
         """
         Constructor for the Menu
         """
         self.plt_file = plt_file
         self.to_find = has_var
+        # TODO: don't use python keywords as variables ("all")
         self.all = all 
         self.description = description
 
@@ -94,7 +94,6 @@ class Menu():
                 self.fields[hfile.readline().replace('\n', '')] = i
 
         self.regexp_species = re.compile(self.field_info["Y"][0])
-
         self.menu()
 
     def menu(self):
@@ -126,7 +125,8 @@ class Menu():
             print(line)
         if not_found:
             print(cap)
-            print("WARNING! Perharps fields were mispelled...\n Please refer to the database by using flag --all -a\n")
+            print(("WARNING! Perharps fields were mispelled...\n"
+                   "Please refer to the database by using flag --all -a\n"))
         else:
             print(cap+"\n")
 
@@ -168,6 +168,7 @@ class Menu():
                 name = list(self.field_info)[i]
                 spacing = (max_field-len_of_fields[i]) + 2
                 description = self.field_info[name][1]
+                # TODO: you could use the space padding formatter like for the species: {name:<{spacing}}
                 print(name+(" ")*spacing+yes_no[i]+" : "+description)
         else:
             print("Name"+" "*(max_field-len("Name"))+" "*3+"Description")
@@ -215,7 +216,6 @@ class Menu():
         for l in sp_lines:
             print(l) 
         print(cap+"\n")
-
 
     def variables_finder(self):
         # Let's find all the fields in the plot file
