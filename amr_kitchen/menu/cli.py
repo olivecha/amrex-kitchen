@@ -8,23 +8,23 @@ from .menu import Menu
 def main():
     # Argument parser
     parser = argparse.ArgumentParser(
-            description="Reads fields and species of a plotfile")
+            description="Displays fields and species of a plotfile")
 
     parser.add_argument(
             "plotfile", type=str,
             help="Path of the plotfile to read")
-
-    parser.add_argument(
-            "--fields", "-f", action='store_false',
-            help="Flag to disable showing the fields in the plotfile")
-
-    parser.add_argument(
-            "--species", "-s", action='store_false',
-            help="Flag to disable showing the species in the plotfile")
     
     parser.add_argument(
-            "--has_var", "-hv", action='store_true',
-            help="Flag to enable showing all the fields in the database and if they are the plotfile or not")
+            "--has_var", "-hv", type=str, nargs='+',
+            help=("Variable to find in the plotfile"))
+    
+    parser.add_argument(
+            "--all", "-a", action='store_true',
+            help="Flag to enable displaying every field in the database and if they are the plotfile or not")
+    
+    parser.add_argument(
+            "--description", "-d", action='store_true',
+            help="Flag to enable displaying the fields' descriptions")
 
 
     args = parser.parse_args()
@@ -36,9 +36,9 @@ def main():
 
     # Colander object
     Menu(plt_file=args.plotfile,
-         variables=args.fields,
-         species=args.species,
-         has_var=args.has_var,)
+         has_var=args.has_var,
+         all=args.all,
+         description=args.description)
 
 if __name__ == "__main__":
     main()
