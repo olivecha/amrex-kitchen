@@ -204,7 +204,7 @@ class Menu():
         # Amount of spaces padding so each string has the same lenght 
         pad = [l + (max(sp_lens) - l) for l in sp_lens]
         sp_padded = [f"{sp: <{p}}" for sp, p in zip(list_variables, pad)]
-        field_per_line = 6
+        field_per_line = 4
         sp_lines = [' '.join(sp_padded[i:i+field_per_line]) for i in range(0, len(sp_padded), field_per_line)]
         line_lenght = len(sp_lines[0]) 
         cap = "+"+("-"*(line_lenght-2))+"+"

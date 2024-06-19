@@ -4,6 +4,8 @@ import numpy as np
 import argparse
 from .menu import Menu
 
+def list_of_strings(arg):
+    return arg.split(',')
 
 def main():
     # Argument parser
@@ -15,7 +17,7 @@ def main():
             help="Path of the plotfile to read")
     
     parser.add_argument(
-            "--has_var", "-hv", type=str, nargs='+',
+            "--has_var", "-hv", type=list_of_strings,
             help=("Variable to find in the plotfile"))
     
     parser.add_argument(
