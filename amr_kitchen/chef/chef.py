@@ -1,7 +1,7 @@
 import os
 import sys
 import time
-import multiprocessing
+from pathos.multiprocessing import ProcessingPool as Pool
 from importlib.util import spec_from_file_location
 from importlib.util import module_from_spec
 from inspect import signature
@@ -77,6 +77,7 @@ def chefs_knife_byspecies_field(args):
     offsets = []
     mins = []
     maxs = []
+    outnfields = len(args['sp_indexes'])
     # Open the read and write
     with open(args['bfpath'], 'rb') as bfr:
         with open(args['newbfpath'], 'wb') as bfw:
@@ -93,9 +94,9 @@ def chefs_knife_byspecies_field(args):
                 offsets.append(bfw.tell())
                 # shape of the box
                 boxshape = tuple([datashape[i] for i in range(3)])
-                # Compute the new binary header (Always one field)
+                # Compute the new binary header (Number of species)
                 header_w = header.replace(f'{datashape[-1]}\n', 
-                                          '1\n')
+                                          f"{outnfields}\n")
                 # Write the new header
                 bfw.write(header_w.encode('ascii'))
                 # Read the data
@@ -130,6 +131,7 @@ def chefs_knife_byreaction_field(args):
     offsets = []
     mins = []
     maxs = []
+    outnfields = len(args['rx_indexes'])
     # Open the read and write
     with open(args['bfpath'], 'rb') as bfr:
         with open(args['newbfpath'], 'wb') as bfw:
@@ -148,7 +150,7 @@ def chefs_knife_byreaction_field(args):
                 boxshape = tuple([datashape[i] for i in range(3)])
                 # Compute the new binary header (Always one field)
                 header_w = header.replace(f'{datashape[-1]}\n', 
-                                          '1\n')
+                                          f'{outnfields}\n')
                 # Write the new header
                 bfw.write(header_w.encode('ascii'))
                 # Read the data
@@ -472,7 +474,7 @@ class Chef(PlotfileCooker):
                     output.append(self.knife(args))
             else:
                 print(f"Cooking level {lv} in parallel")
-                pool = multiprocessing.Pool()
+                pool = Pool()
                 output = tqdm(pool.imap(self.knife, mp_calls),
                               total=len(mp_calls))
             #Reorder the offsets to match the box order
@@ -507,7 +509,7 @@ class Chef(PlotfileCooker):
         recipe_location = os.path.join(*os.path.split(recipe_file)[:-1])
         sys.path.append(recipe_location)
         # Get the module spec from the python file
-        mod_spec = spec_from_file_location(name='',
+        mod_spec = spec_from_file_location(name='user_recipe',
                                            location=recipe_file)
         # Define the module placeholder
         recipe_module = module_from_spec(mod_spec)
