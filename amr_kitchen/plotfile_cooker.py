@@ -169,9 +169,6 @@ class PlotfileCooker(object):
             all_maxs.append({})
             all_mins.append({})
             cfile_path = os.path.join(self.pfile, self.cell_paths[i], "Cell_H")
-            if validate_mode:
-                print(('Reading box indices and binary path data from file:'
-                      f' {cfile_path}'))
             with open(cfile_path) as cfile:
                 # Skip 2 lines
                 cfile.readline()
