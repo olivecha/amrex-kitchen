@@ -21,14 +21,17 @@ def parallel_combine_binary_files(args):
                 while True:
                     try:
                         # Get the read shape and indices
-                        h1 = bf1.readline().decode('ascii')
+                        h1 = bf1.readline()
+                        h1 = h1.decode('ascii')
                         shape1 = shape_from_header(h1)
                         idx1 = indices_from_header(h1)
                         # For both plotfiles
-                        h2 = bf2.readline().decode('ascii')
+                        h2 = bf2.readline()
+                        h2 = h2.decode('ascii')
                         shape2 = shape_from_header(h2)
                         idx2 = indices_from_header(h2)
                     except Exception as e:
+                        print(e)
                         break
                     # Define the write binary header
                     hw = header_from_indices(idx1[0],
@@ -113,7 +116,8 @@ def combine(pck1, pck2, pltout=None, vars1=None, vars2=None):
             mp_calls.append(mp_call)
         # Strain in parallel
         pool = multiprocessing.Pool()
-        new_offsets = pool.map(parallel_combine_binary_files, mp_calls)
+        new_offsets = pool.map(parallel_combine_binary_files,
+                               mp_calls)
         # Reorder the offsets to match the box order
         mapped_offsets = np.empty(len(pck1.boxes[lv]), dtype=int)
         for file_idxs, offsets in zip(box_index_map, new_offsets):
