@@ -26,7 +26,6 @@ setuptools.setup(
         "console_scripts": [
             "mandoline = amr_kitchen.mandoline.cli:main",
             "colander = amr_kitchen.colander.cli:main",
-            "spoon = amr_kitchen.spoon.cli:main",
             "taste = amr_kitchen.taste.cli:main",
             "chef = amr_kitchen.chef.cli:main",
             "menu = amr_kitchen.menu.cli:main",
