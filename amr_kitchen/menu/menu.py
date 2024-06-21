@@ -110,18 +110,22 @@ class Menu(PlotfileCooker):
         self.menu()
 
     def menu(self):
+        compatible = True
         variables = self.variables_finder()
         if self.min_max or self.finest_lv:
+            compatible = False
             min_max_data = self.find_min_max() 
             self.show_min_max(min_max_data)
         if self.to_find:
+            compatible = False
             self.finding(variables) 
         if self.description or self.every:
+            compatible = False
             self.show_variables_description(variables)
-        else:
+        if compatible:
             self.show_variables(variables)
-        species = self.species_finder()
-        self.show_species(species)
+            species = self.species_finder()
+            self.show_species(species)
     
     def find_min_max(self):
         min_and_max = {}
@@ -141,7 +145,13 @@ class Menu(PlotfileCooker):
                 # Absolute min and max 
                 minimum = np.min([self.cells[lv]["mins"][field].min() for lv in range(self.limit_level + 1)]) 
                 maximum = np.max([self.cells[lv]["maxs"][field].max() for lv in range(self.limit_level + 1)])
-            min_and_max[field] = (str("{:.3e}".format(minimum)), str("{:.3e}".format(maximum)), units)
+            minimum = str("{:.3}".format(minimum))
+            maximum = str("{:.3}".format(maximum))
+            if not minimum.startswith("-"):
+                minimum = " "+minimum
+            if not maximum.startswith("-"):
+                maximum = " "+maximum
+            min_and_max[field] = (minimum, maximum, units)
         return min_and_max
     
     def show_min_max(self, min_max_data):
@@ -162,9 +172,9 @@ class Menu(PlotfileCooker):
         max_lenght = max_name + max_min + max_max + max_unit + 3 
         
         cap = "+"+"-"*max_lenght+"+\t+"+"-"*max_lenght+"+"
-        title = " "*((len(cap)//2)-8)+"Fields' Mins and Maxs:"
-        header1 = "Fields"+" "*(max_name-3)+"Min."+" "*(max_min-3)+"Max."+" "*(max_max-3)+"Units"
-        header2 = " "*(max_unit-5)+"\tFields"+" "*(max_name-3)+"Min."+" "*(max_min-3)+"Max."+" "*(max_max-3)+"Units"
+        title = " "*((len(cap)//2)-10)+"Fields' Mins and Maxs:"
+        header1 = "Fields"+" "*(max_name-2)+"Min."+" "*(max_min-3)+"Max."+" "*(max_max-4)+"Units"
+        header2 = " "*(max_unit-5)+"\tFields"+" "*(max_name-2)+"Min."+" "*(max_min-3)+"Max."+" "*(max_max-4)+"Units"
         print(title)
         print(cap)
         print(header1+header2)
@@ -185,27 +195,18 @@ class Menu(PlotfileCooker):
         print("\n")
 
     def finding(self,list_variables):
-        lines = []
+        results = []
         not_found = False
         for to_find in self.to_find:
             if to_find in list_variables:
-                lines.append(f"{to_find} found!")
+                results.append(f"'{to_find}' found")
             else:
-                lines.append(f"{to_find} not found!")
+                results.append(f"'{to_find}' not found")
                 not_found = True
-        max_lenght = np.max([len(line) for line in lines])
-        title = " "*((max_lenght//2)-7)+"Search results:"
-        cap = "+"+("-"*(max_lenght-2)+"+")
-        print(title)
-        print(cap)
-        for line in lines:
-            print(line)
+        print(f"Search results: {', '.join(map(str, results))}")
         if not_found:
-            print(cap)
             print(("WARNING! Perharps fields were mispelled...\n"
                    "Please refer to the database by using flag --every -e\n"))
-        else:
-            print(cap+"\n")
 
     def show_variables_description(self, list_variables):
         # Let's print the Fields
