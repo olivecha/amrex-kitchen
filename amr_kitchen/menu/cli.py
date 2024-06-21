@@ -35,7 +35,7 @@ def main():
     
     parser.add_argument(
             "--finest_lv", "-f", action='store_true',
-            help="Flag to enable displaying the fields' min and max at the finest level")
+            help="(Equivalent to menu -m -f) Flag to enable displaying the fields' min and max at the finest level")
 
 
     args = parser.parse_args()
