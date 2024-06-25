@@ -256,7 +256,7 @@ class PlotfileCooker(object):
         is adjacent in a given direction the index is set
         to None
         """
-		ghost_map = []
+        ghost_map = []
         for lv in range(self.limit_level + 1):
             lv_gmap = []
             for box_index, indices in enumerate(self.barr_indices[lv]):

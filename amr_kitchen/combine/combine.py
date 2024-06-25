@@ -14,6 +14,10 @@ def parallel_combine_binary_files(args):
     """
     # New offsets
     offsets = []
+    print("Current files:")
+    print(args['bfile_r1'], '\n',
+          args['bfile_r2'], '\n',
+          args['bfile_w'], '\n')
     # Open the three files
     with open(args['bfile_r1'], 'rb') as bf1:
         with open(args['bfile_r2'], 'rb') as bf2:
@@ -31,19 +35,23 @@ def parallel_combine_binary_files(args):
                         shape2 = shape_from_header(h2)
                         idx2 = indices_from_header(h2)
                     except Exception as e:
-                        print(e)
                         break
+                    print('indexes:', idx1, idx2)
+                    print('shapes:', shape1, idx2)
                     # Define the write binary header
                     hw = header_from_indices(idx1[0],
                            idx1[1],
                            shape1[3] + shape2[3])
+                    print('Written header: \n', hw.replace(r'\n', ''))
                     # save the current offset
                     offsets.append(bfw.tell())
                     # Write the header and data
                     bfw.write(hw)
                     data1 = np.fromfile(bf1, 'float64', np.prod(shape1))
                     data2 = np.fromfile(bf2, 'float64', np.prod(shape2))
+                    print('datas shapes:', data1.shape, data2.shape)
                     dataw = np.concatenate([data1, data2])
+                    print('data w shape:', dataw.shape)
                     bfw.write(dataw.tobytes())
     return offsets
 
@@ -116,8 +124,8 @@ def combine(pck1, pck2, pltout=None, vars1=None, vars2=None):
             mp_calls.append(mp_call)
         # Strain in parallel
         pool = multiprocessing.Pool()
-        new_offsets = pool.map(parallel_combine_binary_files,
-                               mp_calls)
+        new_offsets = map(parallel_combine_binary_files,
+                          mp_calls)
         # Reorder the offsets to match the box order
         mapped_offsets = np.empty(len(pck1.boxes[lv]), dtype=int)
         for file_idxs, offsets in zip(box_index_map, new_offsets):
