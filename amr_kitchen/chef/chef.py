@@ -42,7 +42,7 @@ def chefs_knife_single_field(args):
                 # shape of the box
                 boxshape = tuple([datashape[i] for i in range(3)])
                 # Compute the new binary header (Always one field)
-                header_w = header.replace(f'{datashape[-1]}\n', 
+                header_w = header.replace(f'{datashape[-1]}\n',
                                           '1\n')
                 # Write the new header
                 bfw.write(header_w.encode('ascii'))
@@ -95,7 +95,7 @@ def chefs_knife_byspecies_field(args):
                 # shape of the box
                 boxshape = tuple([datashape[i] for i in range(3)])
                 # Compute the new binary header (Number of species)
-                header_w = header.replace(f'{datashape[-1]}\n', 
+                header_w = header.replace(f'{datashape[-1]}\n',
                                           f"{outnfields}\n")
                 # Write the new header
                 bfw.write(header_w.encode('ascii'))
@@ -443,6 +443,7 @@ class Chef(PlotfileCooker):
         # Iterate over the existing binary files and write 
         for lv in range(self.limit_level + 1):
             level_files = np.array(self.cells[lv]["files"])
+            level_offsets = np.array(self.cells[lv]["offsets"])
             ncells = len(level_files)
             # All indexes of the boxes at lv
             box_indexes = np.arange(ncells)
@@ -450,8 +451,13 @@ class Chef(PlotfileCooker):
             mp_calls = []
             for bfpath in np.unique(level_files):
                 # Boxes in the current binary file
-                bf_indexes = box_indexes[level_files == bfpath]
-                box_index_map.append(bf_indexes)
+                bf_mask = level_files == bfpath
+                bf_indexes = box_indexes[bf_mask]
+                # Sort the box map by offsets values
+                # So they match the read order
+                bf_offsets_r = level_offsets[bf_mask]
+                box_index_map.append(bf_indexes[np.argsort(bf_offsets_r)])
+                # New binary file
                 newbfpath = os.path.join(self.outdir, 
                                          self.cell_paths[lv], 
                                          os.path.split(bfpath)[-1])

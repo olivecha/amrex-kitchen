@@ -133,7 +133,6 @@ class Colander(PlotfileCooker):
                                          'Cell_H')
             # All indexes of the boxes at lv
             box_indexes = np.arange(ncells)
-
             # Multiprocessing args list
             mp_calls = []
             box_index_map = []

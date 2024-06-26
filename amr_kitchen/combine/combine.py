@@ -14,44 +14,36 @@ def parallel_combine_binary_files(args):
     """
     # New offsets
     offsets = []
-    print("Current files:")
-    print(args['bfile_r1'], '\n',
-          args['bfile_r2'], '\n',
-          args['bfile_w'], '\n')
     # Open the three files
     with open(args['bfile_r1'], 'rb') as bf1:
         with open(args['bfile_r2'], 'rb') as bf2:
             with open(args['bfile_w'], 'wb') as bfw:
-                while True:
-                    try:
-                        # Get the read shape and indices
-                        h1 = bf1.readline()
-                        h1 = h1.decode('ascii')
-                        shape1 = shape_from_header(h1)
-                        idx1 = indices_from_header(h1)
-                        # For both plotfiles
-                        h2 = bf2.readline()
-                        h2 = h2.decode('ascii')
-                        shape2 = shape_from_header(h2)
-                        idx2 = indices_from_header(h2)
-                    except Exception as e:
-                        break
-                    print('indexes:', idx1, idx2)
-                    print('shapes:', shape1, idx2)
+                for off1, off2 in zip(args["offst_r1"],
+                                      args["offst_r2"]):
+                    # Go to the box in the file
+                    bf1.seek(off1)
+                    bf2.seek(off2)
+                    # Get the read shape and indices
+                    h1 = bf1.readline()
+                    h1 = h1.decode('ascii')
+                    shape1 = shape_from_header(h1)
+                    idx1 = indices_from_header(h1)
+                    # For both plotfiles
+                    h2 = bf2.readline()
+                    h2 = h2.decode('ascii')
+                    shape2 = shape_from_header(h2)
+                    idx2 = indices_from_header(h2)
                     # Define the write binary header
                     hw = header_from_indices(idx1[0],
                            idx1[1],
                            shape1[3] + shape2[3])
-                    print('Written header: \n', hw.replace(r'\n', ''))
                     # save the current offset
                     offsets.append(bfw.tell())
                     # Write the header and data
                     bfw.write(hw)
                     data1 = np.fromfile(bf1, 'float64', np.prod(shape1))
                     data2 = np.fromfile(bf2, 'float64', np.prod(shape2))
-                    print('datas shapes:', data1.shape, data2.shape)
                     dataw = np.concatenate([data1, data2])
-                    print('data w shape:', dataw.shape)
                     bfw.write(dataw.tobytes())
     return offsets
 
@@ -76,23 +68,30 @@ def combine(pck1, pck2, pltout=None, vars1=None, vars2=None):
     assert pck1 == pck2
     # And max AMR Level
     assert pck1.limit_level == pck2.limit_level
+    # Also validate each box is in the same file name
+    bf_vec = np.vectorize(lambda s:os.path.split(s)[-1])
+    for lv in range(pck1.limit_level + 1):
+        assert np.array_equal(bf_vec(pck1.cells[lv]['files']),
+                              bf_vec(pck2.cells[lv]['files']))
     # TODO: allow selected fields
     if (vars1 is not None) or (vars2 is not None):
         raise NotImplementedError
-
     # Compute the field list
     # TODO: handle duplicates and assume they have the same
     # value (keep only one of two)
     cb_fields = list(pck1.fields.keys()) + list(pck2.fields.keys())
     nfields = len(cb_fields)
     # <<< End of parse input
+
     # make the output dir
     pck1.make_dir_tree(pltout)
     # For each AMR level
     for lv in range(pck1.limit_level + 1):
         lvstart = time.time()
         bfiles_paths_1 = np.array(pck1.cells[lv]["files"])
+        lv_offsets_1 = np.array(pck1.cells[lv]['offsets'])
         bfiles_paths_2 = np.array(pck2.cells[lv]["files"])
+        lv_offsets_2 = np.array(pck2.cells[lv]['offsets'])
         ncells = len(bfiles_paths_1)
         # Should be true but would be bad if not
         assert len(bfiles_paths_1) == len(bfiles_paths_2)
@@ -104,10 +103,19 @@ def combine(pck1, pck2, pltout=None, vars1=None, vars2=None):
         box_index_map = []
         # On process per binary file
         for bfile_r1 in np.unique(bfiles_paths_1):
+            # This must be the same boolean array 
+            # for both plotfiles
+            bf_match = bfiles_paths_1 == bfile_r1
             # The other binary file we read
-            bfile_r2 = bfiles_paths_2[bfiles_paths_1 == bfile_r1][0]
-            # Indexes of cells in the binary file
-            bf_indexes = box_indexes[bfiles_paths_1 == bfile_r1]
+            bfile_r2 = bfiles_paths_2[bf_match][0]
+            # Indexes of boxes in the binary file
+            bf_indexes = box_indexes[bf_match]
+            # Offsets of the boxes in the binaries
+            # The order of these can differ between
+            # Plotfiles for some reason so we need 
+            # to keep track of it
+            offsets_bf1 = lv_offsets_1[bf_match]
+            offsets_bf2 = lv_offsets_2[bf_match]
             # Store the index of the boxes with the current file
             box_index_map.append(bf_indexes)
             # Path to the combined binary files (for Windows)
@@ -119,13 +127,15 @@ def combine(pck1, pck2, pltout=None, vars1=None, vars2=None):
                                    os.path.basename(os.path.split(bfile_r1)[0]),
                                    os.path.basename(bfile_r1))
             mp_call = {"bfile_r1":bfile_r1,
+                       "offst_r1":offsets_bf1,
                        "bfile_r2":bfile_r2,
+                       "offst_r2":offsets_bf2,
                        "bfile_w":bfile_w}
             mp_calls.append(mp_call)
         # Strain in parallel
         pool = multiprocessing.Pool()
-        new_offsets = map(parallel_combine_binary_files,
-                          mp_calls)
+        new_offsets = pool.map(parallel_combine_binary_files,
+                               mp_calls)
         # Reorder the offsets to match the box order
         mapped_offsets = np.empty(len(pck1.boxes[lv]), dtype=int)
         for file_idxs, offsets in zip(box_index_map, new_offsets):
