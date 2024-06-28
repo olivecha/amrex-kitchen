@@ -17,7 +17,7 @@ def first_increment(args):
                 data = np.fromfile(bf, 'float64', np.prod(shape))
                 data = data.reshape(shape, order='F')
                 data = data[..., args["INT_FIELD"]]
-                return np.sum(data[args["covering_masks"][args["lv"]][args["bid"]]] * args["dV"])
+                return np.sum(data[args["covering_masks"]] * args["dV"])
 
 def second_increment(args):
      """
@@ -98,7 +98,7 @@ def volume_integration(plotfile,field):
                        "file":file,
                        "offset":offset,
                        "INT_FIELD":INT_FIELD,
-                       "covering_masks":covering_masks,
+                       "covering_masks":covering_masks[lv][bid],
                        "lv":lv,
                        "dV":dV,}
             mp_calls.append(mp_call)
