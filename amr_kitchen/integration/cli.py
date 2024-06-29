@@ -15,6 +15,7 @@ def main():
             "plotfile", type=str,
             help="Path of the plotfile to integrate")
     
+    # TODO: remove 
     parser.add_argument(
             "--output", "-o", type=str,
             help="Output path to store the combined plotfile")
