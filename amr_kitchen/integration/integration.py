@@ -5,71 +5,44 @@ import numpy as np
 import matplotlib.pyplot as plt
 from amr_kitchen import PlotfileCooker
 from amr_kitchen.utils import shape_from_header
+from amr_kitchen.utils import expand_array3d
 
-# TODO: rename increment_sum_masked and increment_sum
-# so the functions name make sens outside of the context
-# they are called
-def first_increment(args):
+def increment_sum_masked(args):
     """
     Increments sum with data from each bfile of a level  
     """
     with open(args["file"], 'rb') as bf:
-                bf.seek(args["offset"])
-                h = bf.readline()
-                shape = shape_from_header(h.decode('ascii'))
-                # TODO: only read the integration field its going to be alot faster
-                # Also do in the last level function
-                # This might do the trick instead of iterating by binary file
-                # box_shape = (shape[0], shape[1], shape[2])
-                # skip field_pos * 8 bytes per float * points in box
-                # bf.seek(np.prod(box_shape)*args["INT_FIELD"]*8, 1)
-                # Only read the data from one box
-                # data = np.fromfile(bf, 'float64', np.prod(box_shape))
-                # data = data.reshape(box_shape, order='F')
-                data = np.fromfile(bf, 'float64', np.prod(shape))
-                data = data.reshape(shape, order='F')
-                # TODO: use lower-case as it is not a global variable anymore
-                data = data[..., args["INT_FIELD"]]
-                # TODO: maybe rename the key to singular
-                return np.sum(data[args["covering_masks"]] * args["dV"])
+        bf.seek(args["offset"])
+        h = bf.readline()
+        shape = shape_from_header(h.decode('ascii'))
+        box_shape = (shape[0], shape[1], shape[2])
+        # skip field_pos 
+        bf.seek(np.prod(box_shape)*args["int_field"]*8, 1)
+        # Only read the data from one box
+        data = np.fromfile(bf, 'float64', np.prod(box_shape))
+        data = data.reshape(box_shape, order='F')
+        return np.sum(data[args["covering_mask"]] * args["dV"])
 
-# TODO: same thing for function name
-def second_increment(args):
+def increment_sum(args):
      """
      Increments sum with data from each bfile of the finest level  
      """
      with open(args["file"], 'rb') as bf:
-            bf.seek(args["offset"])
-            h = bf.readline()
-            shape = shape_from_header(h.decode('ascii'))
-            # TODO: also only read the field data
-            data = np.fromfile(bf, 'float64', np.prod(shape))
-            data = data.reshape(shape, order='F')
-            data = data[..., args["INT_FIELD"]]
-            return np.sum(data) * args["dV"]
+        bf.seek(args["offset"])
+        h = bf.readline()
+        shape = shape_from_header(h.decode('ascii'))
+        box_shape = (shape[0], shape[1], shape[2])
+        # skip field_pos 
+        bf.seek(np.prod(box_shape)*args["int_field"]*8, 1)
+        # Only read the data from one box
+        data = np.fromfile(bf, 'float64', np.prod(box_shape))
+        data = data.reshape(box_shape, order='F')
+        return np.sum(data) * args["dV"]
 
-# Move this to amr_kitchen.utils
-def expand_array3d(arr, factor):
-    """
-    Data reading utility
-    ----
-    Expand lower resolution 2D array by [factor]
-    to broadcast it to a higher level grid.
-    This allows broadcasting lower resolution arrays to a higher 
-    AMR level grid without altering the data.
-    ----
-    """
-    return np.repeat(np.repeat(np.repeat(arr, factor, axis=0),
-                               factor, axis=1),
-                     factor, axis=2)
-
-
-def volume_integration(plotfile, field):
+def volume_integration(pck, field):
     """
     Prints the volume integral of the chosen field 
     """
-    # Creating a PlotfileCooker instance
-    pck = PlotfileCooker(plotfile, ghost=True)
     # TODO: if the plotfile has a 'volFrac' field
     # it means there are cells truncated by an embedded boundary
     # you could create two others integration functions where dV
@@ -77,12 +50,7 @@ def volume_integration(plotfile, field):
     # smaller than 1.0 in the box (sum += data[mask] * volfrac * dV)
 
     INT_FIELD = pck.fields[field]
-    # TODO: you can remove this it was for you
-    # 1. Find out the upper level mask for each box
-    #    That is which points in the box are covered by
-    #    Higher level data
-    #   - Assume levels intersections dont jump more
-    #     than one level (Dont mask lv 2 with lv 4)
+
     covering_masks = []
     for lv in range(pck.limit_level): # Last level is not masked
         # use box indices in list
@@ -92,9 +60,15 @@ def volume_integration(plotfile, field):
             # Convert to box array indices at lv + 1
             barr_starts = np.array((indices[0] * 2) // next_lv_factors, dtype=int)
             barr_ends = np.array((indices[1] * 2) // next_lv_factors, dtype=int)
-            next_level_boxes = pck.box_arrays[lv + 1][barr_starts[0]:barr_ends[0]+1,
-                                                    barr_starts[1]:barr_ends[1]+1,
-                                                    barr_starts[2]:barr_ends[2]+1]
+            #if 2d plotfile
+            if pck.ndims == 2:
+                next_level_boxes = pck.box_arrays[lv + 1][barr_starts[0]:barr_ends[0]+1,
+                                                        barr_starts[1]:barr_ends[1]+1]
+            #if 3d plotfile
+            else:
+                next_level_boxes = pck.box_arrays[lv + 1][barr_starts[0]:barr_ends[0]+1,
+                                                        barr_starts[1]:barr_ends[1]+1,
+                                                        barr_starts[2]:barr_ends[2]+1]
             # Convert the upper level box slice to lower level bool
             bcast_factor = next_lv_factors[0] // 2
             next_lv_map = expand_array3d(next_level_boxes, bcast_factor)
@@ -114,9 +88,6 @@ def volume_integration(plotfile, field):
             lv_masks.append(mask)
         covering_masks.append(lv_masks)
                 
-    # TODO: also can be removed as this was for you
-    # 2. Do the integration with the masks
-    #   No need to use masks for the finest level
     integral = 0
     mp_calls = []
     for lv in range(pck.limit_level):
@@ -129,19 +100,17 @@ def volume_integration(plotfile, field):
             mp_call = {"bid":bid,
                        "file":file,
                        "offset":offset,
-                       "INT_FIELD":INT_FIELD,
-                       "covering_masks":covering_masks[lv][bid],
+                       "int_field":INT_FIELD,
+                       "covering_mask":covering_masks[lv][bid],
                        # TODO: I think you can remove 'lv' and 'bid'
                        "lv":lv,
                        "dV":dV,}
             mp_calls.append(mp_call)
         pool = multiprocessing.Pool()
-        sums = pool.map(first_increment,
+        sums = pool.map(increment_sum_masked,
                                     mp_calls)
-        # TODO: Replace 'sum' with something else as it is a python keyword
-        # (Function from the base library)
-        for sum in sums:
-            integral+=sum
+        for summation in sums:
+            integral+=summation
     mp_calls = []
     for bid, file, offset in zip(range(len(pck.boxes[pck.limit_level])),
                                  pck.cells[pck.limit_level]['files'],
@@ -149,18 +118,14 @@ def volume_integration(plotfile, field):
 
             mp_call = {"file":file,
                        "offset":offset,
-                       "INT_FIELD":INT_FIELD,
+                       "int_field":INT_FIELD,
                        "dV":dV,}
             mp_calls.append(mp_call)
     pool = multiprocessing.Pool()
-    sums = pool.map(second_increment,
+    sums = pool.map(increment_sum,
                                     mp_calls)
-    for sum in sums:
-        integral+=sum
+    for summation in sums:
+        integral+=summation
 
-
-    # TODO: return the value and print it in the cli
-    # Also make the plotfile argument a PlotfileCooker instance
-    # and create the object in the cli so we can integrate multiple
-    # fields in a script without re-reading the header data each time
-    print(f"Volume integral of {field} in plotfile: {integral}")
+    return integral
+    

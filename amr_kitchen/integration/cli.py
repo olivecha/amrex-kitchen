@@ -1,5 +1,6 @@
 import sys
 from .integration import volume_integration
+from amr_kitchen import PlotfileCooker
 import argparse
 
 def list_of_strings(arg):
@@ -14,11 +15,7 @@ def main():
     parser.add_argument(
             "plotfile", type=str,
             help="Path of the plotfile to integrate")
-    
-    # TODO: remove 
-    parser.add_argument(
-            "--output", "-o", type=str,
-            help="Output path to store the combined plotfile")
+
     parser.add_argument(
             "--vars", "-v", type=list_of_strings,
             help=("""Variables (between " ") to integrate"""))
@@ -28,12 +25,17 @@ def main():
     Input arguments sanity check
     """
     if args.plotfile is None:
-        raise ValueError("Must specify two plotfiles to filter")
+        raise ValueError("Must specify a plotfile to integrate")
+    
 
+    # Creating a PlotfileCooker instance
+    pck = PlotfileCooker(args.plotfile, ghost=True)
     # Integrating the chosen fields 
     for field in args.vars:
-        volume_integration(plotfile=args.plotfile,
-                           field=field)
+        integral = volume_integration(pck=pck,
+                                      field=field)
+        print(f"Volume integral of {field} in plotfile: {integral}")
+
 
 if __name__ == "__main__":
     main()

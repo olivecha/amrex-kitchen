@@ -243,9 +243,16 @@ class PlotfileCooker(object):
             for i, idx in enumerate(self.cells[lv]["indexes"]):
                 bidx_lo = idx[0] // box_rez
                 bidx_hi = idx[1] // box_rez
-                box_array[bidx_lo[0]:bidx_hi[0] + 1,
+                #if 2d plotfile 
+                if self.ndims == 2:
+                    box_array[bidx_lo[0]:bidx_hi[0] + 1,
+                          bidx_lo[1]:bidx_hi[1] + 1] = i
+                #if 3d plotfile
+                else:
+                    box_array[bidx_lo[0]:bidx_hi[0] + 1,
                           bidx_lo[1]:bidx_hi[1] + 1,
                           bidx_lo[2]:bidx_hi[2] + 1] = i
+                
                 lv_barray_indices.append([bidx_lo, bidx_hi])
             box_arrays.append(box_array)
             box_array_indices.append(lv_barray_indices)
@@ -265,23 +272,39 @@ class PlotfileCooker(object):
             barr_shape = self.box_arrays[lv].shape
             for box_index, indices in enumerate(self.barr_indices[lv]):
                 gmap = [[[], []], [[], []], [[], []]]
-                for coo in range(3):
+                for coo in range(self.ndims):
                     idx_lo = np.copy(indices)
                     idx_lo[0][coo] = max(idx_lo[0][coo] - 1, 0)
-                    for bid in np.unique(self.box_arrays[lv][idx_lo[0][0]:idx_lo[1][0],
-                                                            idx_lo[0][1]:idx_lo[1][1],
-                                                            idx_lo[0][2]:idx_lo[1][2]]):
-                        if bid != box_index:
-                            gmap[coo][0].append(bid)
+                    #if 2d plotfile
+                    if self.ndims == 2:
+                        for bid in np.unique(self.box_arrays[lv][idx_lo[0][0]:idx_lo[1][0],
+                                                                idx_lo[0][1]:idx_lo[1][1]]):
+                            if bid != box_index:
+                                gmap[coo][0].append(bid)
+                    #if 3d plotfile
+                    else:
+                        for bid in np.unique(self.box_arrays[lv][idx_lo[0][0]:idx_lo[1][0],
+                                                                idx_lo[0][1]:idx_lo[1][1],
+                                                                idx_lo[0][2]:idx_lo[1][2]]):
+                            if bid != box_index:
+                                gmap[coo][0].append(bid)
 
                     idx_hi = np.copy(indices)
                     idx_hi[1] += 1
                     idx_hi[1][coo] = min(idx_hi[1][coo] + 1, barr_shape[coo] - 1)
-                    for bid in np.unique(self.box_arrays[lv][idx_hi[0][0]:idx_hi[1][0],
-                                                            idx_hi[0][1]:idx_hi[1][1],
-                                                            idx_hi[0][2]:idx_hi[1][2]]):
-                        if bid != box_index:
-                            gmap[coo][1].append(bid)
+                    #if 2d plotfile
+                    if self.ndims == 2:
+                        for bid in np.unique(self.box_arrays[lv][idx_hi[0][0]:idx_hi[1][0],
+                                                                idx_hi[0][1]:idx_hi[1][1]]):
+                            if bid != box_index:
+                                gmap[coo][1].append(bid)
+                    #if 3d plotfile
+                    else:
+                        for bid in np.unique(self.box_arrays[lv][idx_hi[0][0]:idx_hi[1][0],
+                                                                idx_hi[0][1]:idx_hi[1][1],
+                                                                idx_hi[0][2]:idx_hi[1][2]]):
+                            if bid != box_index:
+                                gmap[coo][1].append(bid)
                 lv_gmap.append(gmap)
             ghost_map.append(lv_gmap)
         return ghost_map
