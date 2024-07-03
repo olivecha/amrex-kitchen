@@ -1,6 +1,7 @@
 import time
 import pickle
 import multiprocessing
+from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
 from amr_kitchen import PlotfileCooker
@@ -25,7 +26,7 @@ def increment_sum_masked(args):
 
 def increment_sum(args):
      """
-     Increments sum with data from each bfile of the finest level  
+     Increments sum with data from each bfile of the finest level
      """
      with open(args["file"], 'rb') as bf:
         bf.seek(args["offset"])
@@ -87,9 +88,10 @@ def volume_integration(pck, field):
             # -1 means there is no box at this level
             lv_masks.append(mask)
         covering_masks.append(lv_masks)
-                
+
     integral = 0
     mp_calls = []
+    pool = multiprocessing.Pool()
     for lv in range(pck.limit_level):
         #  TODO: (Could be re done by iterating per file (maybe faster))
         #  but check if only reading the integration data is faster first
@@ -106,12 +108,15 @@ def volume_integration(pck, field):
                        "lv":lv,
                        "dV":dV,}
             mp_calls.append(mp_call)
-        pool = multiprocessing.Pool()
-        sums = pool.map(increment_sum_masked,
-                                    mp_calls)
-        for summation in sums:
-            integral+=summation
+        now = time.time()
+        print(f'Level {lv}...')
+        for box_int in tqdm(pool.imap(increment_sum_masked,
+                                      mp_calls), total=len(mp_calls)):
+            integral += box_int
+        print(f'Done! ({time.time() - now:.2f} s)')
+
     mp_calls = []
+    dV = np.prod(pck.dx[pck.limit_level])
     for bid, file, offset in zip(range(len(pck.boxes[pck.limit_level])),
                                  pck.cells[pck.limit_level]['files'],
                                  pck.cells[pck.limit_level]['offsets']):
@@ -121,11 +126,11 @@ def volume_integration(pck, field):
                        "int_field":INT_FIELD,
                        "dV":dV,}
             mp_calls.append(mp_call)
-    pool = multiprocessing.Pool()
-    sums = pool.map(increment_sum,
-                                    mp_calls)
-    for summation in sums:
-        integral+=summation
+    now = time.time()
+    print(f'Level {pck.limit_level}...')
+    for box_int in tqdm(pool.imap(increment_sum,
+                                  mp_calls), total=len(mp_calls)):
+        integral += box_int
+    print(f'Done! ({time.time() - now:.2f})')
 
     return integral
-    
