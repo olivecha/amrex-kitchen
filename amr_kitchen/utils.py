@@ -28,16 +28,6 @@ def expand_array3d(arr, factor):
     AMR level grid without altering the data.
     ----
     """
-    # TODO: Discover why it doesn't work for 2d 
-    """print(arr)
-    arr = np.repeat(arr, factor, axis=0)
-    print("\n")
-    print(arr)
-    arr = np.repeat(arr, factor, axis=1)
-    print(arr)
-    print("\n")
-    arr = np.repeat(arr, factor, axis=2)
-    print(arr)"""
     return np.repeat(np.repeat(np.repeat(arr, factor, axis=0),
                                factor, axis=1),
                      factor, axis=2)

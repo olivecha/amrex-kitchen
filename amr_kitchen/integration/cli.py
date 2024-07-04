@@ -1,6 +1,7 @@
 import sys
 from .integration import volume_integration
 from amr_kitchen import PlotfileCooker
+from .field_data import field_units
 import argparse
 
 def list_of_strings(arg):
@@ -19,6 +20,9 @@ def main():
     parser.add_argument(
             "--vars", "-v", type=list_of_strings,
             help=("""Variables (between " ") to integrate"""))
+    parser.add_argument(
+            "--limit_level", "-l", action='store_true',
+            help="Flag to disable masks")
 
     args = parser.parse_args()
     """
@@ -33,8 +37,15 @@ def main():
     # Integrating the chosen fields 
     for field in args.vars:
         integral = volume_integration(pck=pck,
-                                      field=field)
-        print(f"Volume integral of {field} in plotfile: {integral}")
+                                      field=field,
+                                      limit_level=args.limit_level)
+
+        if field in field_units:
+            units = field_units[field]
+        else:
+            units = "[Unknown units]"
+            
+        print(f"Volume integral of {field} in plotfile: {integral:.15f} {units}")
 
 
 if __name__ == "__main__":
