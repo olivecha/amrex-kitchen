@@ -8,13 +8,6 @@ from amr_kitchen.utils import shape_from_header
 from amr_kitchen.utils import expand_array3d
 #from mpi4py.futures import MPIPoolExecutor
 
-# Global Var. indicating if volFrag in plotfile and corresponding int.
-def volfrag_bool(value):
-    global volfrag_flag
-    volfrag_flag = value
-def volint(int_value):
-    global int_volfrag
-    int_volfrag = int_value
 
 def increment_sum_masked(args):
     """
@@ -26,61 +19,60 @@ def increment_sum_masked(args):
         shape = shape_from_header(h.decode('ascii'))
         box_shape = (shape[0], shape[1], shape[2])
         # skip field_pos 
-        bf.seek(np.prod(box_shape)*args["int_field"]*8, 1)
+        bf.seek(np.prod(box_shape)*args['id_int']*8, 1)
         # Only read the data from one box
         data = np.fromfile(bf, 'float64', np.prod(box_shape))
         data = data.reshape(box_shape, order='F')
-        if volfrag_flag:
+        if args['id_vol'] is not None:
             # skip volfrag_pos
-            bf.seek(args["offset"], 0)
+            bf.seek(args["offset"])
             h = bf.readline()
-            bf.seek(np.prod(box_shape)*int_volfrag*8, 1)
+            bf.seek(np.prod(box_shape)*args['id_vol']*8, 1)
             # Only read the data from one box
             data_volfrag = np.fromfile(bf, 'float64', np.prod(box_shape))
             data_volfrag = data_volfrag.reshape(box_shape, order='F')
-            return np.sum(data[args["covering_mask"]] * args["dV"] * data_volfrag)
+            return np.sum(data[args["covering_mask"]] * args["dV"] * data_volfrag[args["covering_mask"]])
         else:
             return np.sum(data[args["covering_mask"]] * args["dV"])
 
 def increment_sum(args):
-     """
-     Increments sum with data from each bfile of the finest level
-     """
-     with open(args["file"], 'rb') as bf:
-        bf.seek(args["offset"])
-        h = bf.readline()
-        shape = shape_from_header(h.decode('ascii'))
-        box_shape = (shape[0], shape[1], shape[2])
-        # skip field_pos 
-        bf.seek(np.prod(box_shape)*args["int_field"]*8, 1)
-        # Only read the data from one box
-        data = np.fromfile(bf, 'float64', np.prod(box_shape))
-        data = data.reshape(box_shape, order='F')
-        if volfrag_flag:
-            # skip volfrag_pos
-            bf.seek(args["offset"], 0)
-            h = bf.readline()
-            bf.seek(np.prod(box_shape)*int_volfrag*8, 1)
-            # Only read the data from one box
-            data_volfrag = np.fromfile(bf, 'float64', np.prod(box_shape))
-            data_volfrag = data_volfrag.reshape(box_shape, order='F')
-            return np.sum(data * args["dV"] * data_volfrag)
-        else:
-            return np.sum(data) * args["dV"]
+    """
+    Increments sum with data from each bfile of the finest level
+    """
+    with open(args["file"], 'rb') as bf:
+       bf.seek(args["offset"])
+       h = bf.readline()
+       shape = shape_from_header(h.decode('ascii'))
+       box_shape = (shape[0], shape[1], shape[2])
+       # skip field_pos 
+       bf.seek(np.prod(box_shape)*args['id_int']*8, 1)
+       # Only read the data from one box
+       data = np.fromfile(bf, 'float64', np.prod(box_shape))
+       data = data.reshape(box_shape, order='F')
+       if args['id_vol'] is not None:
+           # skip volfrag_pos
+           bf.seek(args["offset"], 0)
+           h = bf.readline()
+           bf.seek(np.prod(box_shape)*args['id_vol']*8, 1)
+           # Only read the data from one box
+           data_volfrag = np.fromfile(bf, 'float64', np.prod(box_shape))
+           data_volfrag = data_volfrag.reshape(box_shape, order='F')
+           return np.sum(data * args["dV"] * data_volfrag)
+       else:
+           return np.sum(data) * args["dV"]
 
-def volume_integration(pck, field, limit_level=False):
+
+
+def volume_integral(pck, field, limit_level=False):
     """
     Prints the volume integral of the chosen field 
     """
     # Lets check if volFrac is in the plotifile 
+    id_vol = None
     if "volFrac" in pck.fields:
-        volfrag_bool(True)
-        INT_VOLFRAG = pck.fields["volFrac"]
-        volint(INT_VOLFRAG)
-    else:
-        volfrag_bool(False)
+        id_vol = pck.fields['volFrac']
 
-    INT_FIELD = pck.fields[field]
+    id_int = pck.fields[field]
 
     covering_masks = []
     for lv in range(pck.limit_level): # Last level is not masked
@@ -124,7 +116,8 @@ def volume_integration(pck, field, limit_level=False):
                                                 pck.cells[lv]['offsets']):
                 mp_call = {"file":file,
                         "offset":offset,
-                        "int_field":INT_FIELD,
+                        'id_vol':id_vol,
+                        'id_int':id_int,
                         "covering_mask":covering_masks[lv][bid],
                         "dV":dV,}
                 mp_calls.append(mp_call)
@@ -143,7 +136,8 @@ def volume_integration(pck, field, limit_level=False):
 
             mp_call = {"file":file,
                        "offset":offset,
-                       "int_field":INT_FIELD,
+                       'id_vol':id_vol,
+                       'id_int':id_int,
                        "dV":dV,}
             mp_calls.append(mp_call)
     now = time.time()

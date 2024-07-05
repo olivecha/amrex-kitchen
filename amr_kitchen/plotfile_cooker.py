@@ -233,7 +233,8 @@ class PlotfileCooker(object):
         """
         # Cell resolution in each direction
         box_shapes = self.unique_box_shapes()
-        box_rez = np.min(box_shapes, axis=0)
+        #box_rez = np.min(box_shapes, axis=0)
+        box_rez = np.min(box_shapes)
         box_arrays = []
         box_array_indices = []
         for lv in range(self.limit_level + 1):
@@ -308,7 +309,6 @@ class PlotfileCooker(object):
         #           outpath)
         for pth in self.cell_paths[:limit_level + 1]:
             level_dir = pth
-            #print(os.path.join(os.getcwd(),outpath, level_dir))
             os.makedirs(os.path.join(os.getcwd(),outpath, level_dir), exist_ok=True)
             #shutil.copy(os.path.join(self.pfile, pth + '_H'),
             #            os.path.join(outpath, level_dir))

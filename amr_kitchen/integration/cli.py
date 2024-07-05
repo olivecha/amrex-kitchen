@@ -1,7 +1,7 @@
 import sys
-from .integration import volume_integration
+from integration import volume_integral
 from amr_kitchen import PlotfileCooker
-from .field_data import field_units
+from field_data import field_units
 import argparse
 
 def list_of_strings(arg):
@@ -36,9 +36,9 @@ def main():
     pck = PlotfileCooker(args.plotfile, ghost=True)
     # Integrating the chosen fields 
     for field in args.vars:
-        integral = volume_integration(pck=pck,
-                                      field=field,
-                                      limit_level=args.limit_level)
+        integral = volume_integral(pck=pck,
+                                   field=field,
+                                   limit_level=args.limit_level)
 
         if field in field_units:
             units = field_units[field]
