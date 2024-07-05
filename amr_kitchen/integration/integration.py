@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from amr_kitchen.utils import shape_from_header
 from amr_kitchen.utils import expand_array3d
+#from mpi4py.futures import MPIPoolExecutor
 
 # Global Var. indicating if volFrag in plotfile and corresponding int.
 def volfrag_bool(value):
@@ -31,12 +32,13 @@ def increment_sum_masked(args):
         data = data.reshape(box_shape, order='F')
         if volfrag_flag:
             # skip volfrag_pos
+            bf.seek(args["offset"], 0)
+            h = bf.readline()
             bf.seek(np.prod(box_shape)*int_volfrag*8, 1)
             # Only read the data from one box
             data_volfrag = np.fromfile(bf, 'float64', np.prod(box_shape))
             data_volfrag = data_volfrag.reshape(box_shape, order='F')
-            volfrag = np.sum(data_volfrag)
-            return np.sum(data[args["covering_mask"]] * args["dV"] * volfrag)
+            return np.sum(data[args["covering_mask"]] * args["dV"] * data_volfrag)
         else:
             return np.sum(data[args["covering_mask"]] * args["dV"])
 
@@ -56,12 +58,13 @@ def increment_sum(args):
         data = data.reshape(box_shape, order='F')
         if volfrag_flag:
             # skip volfrag_pos
+            bf.seek(args["offset"], 0)
+            h = bf.readline()
             bf.seek(np.prod(box_shape)*int_volfrag*8, 1)
             # Only read the data from one box
             data_volfrag = np.fromfile(bf, 'float64', np.prod(box_shape))
             data_volfrag = data_volfrag.reshape(box_shape, order='F')
-            volfrag = np.sum(data_volfrag)
-            return np.sum(data) * args["dV"] * volfrag
+            return np.sum(data * args["dV"] * data_volfrag)
         else:
             return np.sum(data) * args["dV"]
 
