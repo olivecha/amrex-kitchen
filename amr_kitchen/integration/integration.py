@@ -11,7 +11,7 @@ from amr_kitchen.utils import expand_array3d
 
 def increment_sum_masked(args):
     """
-    Increments sum with data from each bfile of a level  
+    Increments sum with data from each bfile of a level
     """
     with open(args["file"], 'rb') as bf:
         bf.seek(args["offset"])
@@ -31,9 +31,9 @@ def increment_sum_masked(args):
             # Only read the data from one box
             data_volfrag = np.fromfile(bf, 'float64', np.prod(box_shape))
             data_volfrag = data_volfrag.reshape(box_shape, order='F')
-            return np.sum(data[args["covering_mask"]] * args["dV"] * data_volfrag[args["covering_mask"]])
+            return args["dV"] * np.sum(data[args["covering_mask"]] *  data_volfrag[args["covering_mask"]])
         else:
-            return np.sum(data[args["covering_mask"]] * args["dV"])
+            return args["dV"] * np.sum(data[args["covering_mask"]])
 
 def increment_sum(args):
     """
@@ -57,22 +57,23 @@ def increment_sum(args):
            # Only read the data from one box
            data_volfrag = np.fromfile(bf, 'float64', np.prod(box_shape))
            data_volfrag = data_volfrag.reshape(box_shape, order='F')
-           return np.sum(data * args["dV"] * data_volfrag)
+           return args["dV"] * np.sum(data * data_volfrag)
        else:
            return np.sum(data) * args["dV"]
 
 
-
 def volume_integral(pck, field, limit_level=False):
     """
-    Prints the volume integral of the chosen field 
+    Prints the volume integral of the chosen field
     """
     # Lets check if volFrac is in the plotifile 
     id_vol = None
     if "volFrac" in pck.fields:
         id_vol = pck.fields['volFrac']
+        print(f'Volume fraction ID: {id_vol}')
 
     id_int = pck.fields[field]
+    print(f'Integration field ID: {id_int}')
 
     covering_masks = []
     for lv in range(pck.limit_level): # Last level is not masked
@@ -106,10 +107,10 @@ def volume_integral(pck, field, limit_level=False):
         covering_masks.append(lv_masks)
 
     integral = 0
-    mp_calls = []
     pool = multiprocessing.Pool()
     if not limit_level:
         for lv in range(pck.limit_level):
+            mp_calls = []
             dV = np.prod(pck.dx[lv])
             for bid, file, offset in zip(range(len(pck.boxes[lv])),
                                                 pck.cells[lv]['files'],
