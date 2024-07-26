@@ -406,6 +406,7 @@ class Chef(PlotfileCooker):
                 #     element = reactions
                 # self.rx_indexes = [i for i, rx in gas.reactions() if element in rx]
             else:
+                self.requires_sol = True
                 self.outfields = [self.cookfields[recipe]]
                 self.knife = chefs_knife_single_field
 
