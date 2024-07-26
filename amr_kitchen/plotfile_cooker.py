@@ -114,6 +114,9 @@ class PlotfileCooker(object):
             if not np.allclose(self.cells[lv]['indexes'],
                                other.cells[lv]['indexes']):
                 return False
+        # Compare binary files
+        # for lv in range(self.limit_level + 1):
+        #     if 
         return True
 
     def read_boxes(self, hfile):
@@ -169,9 +172,6 @@ class PlotfileCooker(object):
             all_maxs.append({})
             all_mins.append({})
             cfile_path = os.path.join(self.pfile, self.cell_paths[i], "Cell_H")
-            if validate_mode:
-                print(('Reading box indices and binary path data from file:'
-                      f' {cfile_path}'))
             with open(cfile_path) as cfile:
                 # Skip 2 lines
                 cfile.readline()
@@ -259,15 +259,16 @@ class PlotfileCooker(object):
         is adjacent in a given direction the index is set
         to None
         """
-		ghost_map = []
+        ghost_map = []
         for lv in range(self.limit_level + 1):
             lv_gmap = []
+            barr_shape = self.box_arrays[lv].shape
             for box_index, indices in enumerate(self.barr_indices[lv]):
                 gmap = [[[], []], [[], []], [[], []]]
                 for coo in range(3):
                     idx_lo = np.copy(indices)
                     idx_lo[0][coo] = max(idx_lo[0][coo] - 1, 0)
-                    for bid in np.unique(pck.box_arrays[lv][idx_lo[0][0]:idx_lo[1][0],
+                    for bid in np.unique(self.box_arrays[lv][idx_lo[0][0]:idx_lo[1][0],
                                                             idx_lo[0][1]:idx_lo[1][1],
                                                             idx_lo[0][2]:idx_lo[1][2]]):
                         if bid != box_index:
@@ -276,7 +277,7 @@ class PlotfileCooker(object):
                     idx_hi = np.copy(indices)
                     idx_hi[1] += 1
                     idx_hi[1][coo] = min(idx_hi[1][coo] + 1, barr_shape[coo] - 1)
-                    for bid in np.unique(pck.box_arrays[lv][idx_hi[0][0]:idx_hi[1][0],
+                    for bid in np.unique(self.box_arrays[lv][idx_hi[0][0]:idx_hi[1][0],
                                                             idx_hi[0][1]:idx_hi[1][1],
                                                             idx_hi[0][2]:idx_hi[1][2]]):
                         if bid != box_index:
