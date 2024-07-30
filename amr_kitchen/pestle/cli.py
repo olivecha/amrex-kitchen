@@ -1,7 +1,8 @@
+import sys
 import argparse
-from pestle import volume_integral
+from .pestle import volume_integral
 from amr_kitchen import PlotfileCooker
-from pestle import field_units
+from .pestle import field_units
 
 
 def main():
@@ -20,7 +21,8 @@ def main():
             help=("Use the volFrac field to obtain more"
                   " accurate integrals for plotfiles with embedded"
                   " boundaries. The contribution of a finite volume"
-                  " to the integral is taken as value * dV * volFrac."))
+                  " to the integral is taken as:"
+                  "\n value * dV * volFrac"))
     parser.add_argument(
             "plotfile", type=str,
             help="Path of the plotfile to integrate")
@@ -33,7 +35,13 @@ def main():
         raise ValueError("Must specify a plotfile to integrate")
 
     # Creating a PlotfileCooker instance
-    pck = PlotfileCooker(args.plotfile, ghost=True)
+    try:
+        pck = PlotfileCooker(args.plotfile, ghost=True)
+    except:
+        print("This tool is not supported for plotfiles with ndims < 3")
+        print(("You can use mandoline to create a 2D uniform grid and"
+               " integrate it manually"))
+        sys.exit()
     # Integrating the chosen fields 
     integral = volume_integral(pck=pck,
                                field=args.variable,

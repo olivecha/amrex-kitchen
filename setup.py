@@ -29,7 +29,7 @@ setuptools.setup(
             "spoon = amr_kitchen.spoon.cli:main",
             "taste = amr_kitchen.taste.cli:main",
             "chef = amr_kitchen.chef.cli:main",
-            "integration = amr_kitchen.integration.cli:main",
+            "pestle = amr_kitchen.pestle.cli:main",
         ]
     }
 )
