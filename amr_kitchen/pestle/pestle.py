@@ -8,6 +8,29 @@ from amr_kitchen.utils import shape_from_header
 from amr_kitchen.utils import expand_array3d
 #from mpi4py.futures import MPIPoolExecutor
 
+# Dict. with field names and their units after a volume integral 
+field_units = {"avg_pressure": "[J]",
+                "density": "[kg]",
+                "diffcoeff": "[m^5/s]",
+                "divu": "[m^3 / s]",
+                "enstrophy": "[J]",
+                "FunctCall": "[-]",
+                "gradp": "[N]",
+                "HeatRelease": "[W]",
+                "I_R": "[kg / s]",
+                "kinetic_energy": "[J]",
+                "lambda": "[W m^2 / K]",
+                "mag_vort": "[m^3 / s]",
+                "mass_fractions": "[-]",
+                "mixture_fraction": "[-]",
+                "progress_variable": "[-]",
+                "Qcrit": "[-]",
+                "rhoh": "[J]",
+                "RhoRT": "[J]",
+                "temp": "[K m^3]",
+                "velocity": "[m^4/s]",
+                "viscosity": "[J-s]",
+                "vorticity": "[m^3 / s]"}
 
 def increment_sum_masked(args):
     """
@@ -62,18 +85,18 @@ def increment_sum(args):
            return np.sum(data) * args["dV"]
 
 
-def volume_integral(pck, field, limit_level=False):
+def volume_integral(pck, field, limit_level=None, use_volfrac=False):
     """
     Prints the volume integral of the chosen field
     """
+    # Integration field
+    id_int = pck.fields[field]
+    print(f"Integrating {field} in {pck.pfile}")
     # Lets check if volFrac is in the plotifile 
     id_vol = None
-    if "volFrac" in pck.fields:
+    if ("volFrac" in pck.fields and use_volfrac):
         id_vol = pck.fields['volFrac']
-        print(f'Volume fraction ID: {id_vol}')
-
-    id_int = pck.fields[field]
-    print(f'Integration field ID: {id_int}')
+        print(f"Using embedded boundary volFrac field")
 
     covering_masks = []
     for lv in range(pck.limit_level): # Last level is not masked
@@ -92,15 +115,6 @@ def volume_integral(pck, field, limit_level=False):
             next_lv_map = expand_array3d(next_level_boxes, bcast_factor)
             mask = np.zeros_like(next_lv_map, dtype=bool)
             # mask is true where the value is -1
-            # TODO: (facultatif) here we have a bool array with the number
-            # of points in the box for each box even when the box is fully
-            # covered by the higher level (not added to the sum, so we read
-            # data and then do nothing with it) and fully not covered so we
-            # pass a full array of ones to the multiprocessing pipe (also a
-            # bit wastefull) it would be nice to add flags when:
-            # np.all(next_lv_map == -1) -> no need to mask
-            # np.all(next_lv_map != -1) -> no need to read the data
-            # And handle them in the integration part
             mask[next_lv_map == -1] = 1
             # -1 means there is no box at this level
             lv_masks.append(mask)
@@ -123,7 +137,7 @@ def volume_integral(pck, field, limit_level=False):
                         "dV":dV,}
                 mp_calls.append(mp_call)
             now = time.time()
-            print(f'Level {lv}...')
+            print(f'Integrating level {lv}...')
             for box_int in tqdm(pool.imap(increment_sum_masked,
                                         mp_calls), total=len(mp_calls)):
                 integral += box_int
@@ -142,7 +156,7 @@ def volume_integral(pck, field, limit_level=False):
                        "dV":dV,}
             mp_calls.append(mp_call)
     now = time.time()
-    print(f'Level {pck.limit_level}...')
+    print(f'Integrating level {pck.limit_level}...')
     for box_int in tqdm(pool.imap(increment_sum,
                                   mp_calls), total=len(mp_calls)):
         integral += box_int

@@ -87,8 +87,12 @@ class PlotfileCooker(object):
         self.nfields = len(self.fields)
         # Compute the ghost boxes map around each box
         if ghost:
-            self.box_arrays, self.barr_indices = self.compute_box_array()
-            self.ghost_map = self.compute_ghost_map()
+            if self.ndims == 3:
+                self.box_arrays, self.barr_indices = self.compute_box_array()
+                self.ghost_map = self.compute_ghost_map()
+            else:
+                raise ValueError(("Ghost boxes are not available for plotfiles with"
+                                  " ndims < 3"))
 
     def __eq__(self, other):
         """
