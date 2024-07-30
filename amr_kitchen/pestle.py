@@ -9,11 +9,11 @@ from amr_kitchen import PlotfileCooker
 
 # Argument parser
 parser = argparse.ArgumentParser(
-        description="A quick taste of the plotfile")
+        description="Covering grid volume sum")
 
 parser.add_argument(
         "plotfile", type=str,
-        help="Path of the plotfile to filter")
+        help="Path of the plotfile to integrate")
 
 parser.add_argument(
         "--variable", "-v", type=str,
@@ -75,30 +75,35 @@ def readfieldfrombinfile(fname):
 
 # Covering grid array
 data = np.zeros(hdr.grid_sizes[hdr.limit_level], dtype='double')
+print('data:', data.shape)
 
-start = time.time()
-for lv in range(hdr.limit_level + 1):
-    # Order binary files by size
-    binfiles = np.unique(hdr.cells[lv]['files'])
-    sizes = np.array([os.path.getsize(f) for f in binfiles])
-    read_order = np.flip(np.argsort(sizes))
+if __name__ == '__main__':
+    start = time.time()
+    for lv in range(hdr.limit_level + 1):
+        # Order binary files by size
+        binfiles = np.unique(hdr.cells[lv]['files'])
+        sizes = np.array([os.path.getsize(f) for f in binfiles])
+        read_order = np.flip(np.argsort(sizes))
 
-    if not args.no_log:
-        print('Level', lv)
-    factor = 2**(hdr.limit_level - lv)
-    with multiprocessing.Pool() as pool:
         if not args.no_log:
-            prog = tqdm(total=len(binfiles))
-        for res in pool.imap_unordered(readfieldfrombinfile, binfiles[read_order]):
+            print('Level', lv)
+        factor = 2**(hdr.limit_level - lv)
+        with multiprocessing.Pool() as pool:
             if not args.no_log:
-                prog.update(1)
-            for idx, arr in zip(res[0], res[1]):
-                data[factor * idx[0][0]:(idx[1][0]+1) * factor,
-                     factor * idx[0][1]:(idx[1][1]+1) * factor,
-                     factor * idx[0][2]:(idx[1][2]+1) * factor] = expand_array3d(arr, factor)
+                prog = tqdm(total=len(binfiles))
+            for res in pool.imap_unordered(readfieldfrombinfile, binfiles[read_order]):
+                if not args.no_log:
+                    prog.update(1)
+                for idx, arr in zip(res[0], res[1]):
+                    print(lv, np.sum(expand_array3d(arr, factor)))
+                    data[factor * idx[0][0]:(idx[1][0]+1) * factor,
+                         factor * idx[0][1]:(idx[1][1]+1) * factor,
+                         factor * idx[0][2]:(idx[1][2]+1) * factor] = expand_array3d(arr, factor)
 
-data_sum = np.sum(data)
-integral = np.prod(hdr.dx[hdr.limit_level]) * data_sum
-print(f"Integral of {args.variable} = {integral}")
+    np.save('/Users/olivier/Desktop/cov_grid_test', data)
+    data_sum = np.sum(data)
+    print(data_sum)
+    integral = np.prod(hdr.dx[hdr.limit_level]) * data_sum
+    print(f"Integral of {args.variable} = {integral}")
 
 

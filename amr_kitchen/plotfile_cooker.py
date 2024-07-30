@@ -233,7 +233,8 @@ class PlotfileCooker(object):
         """
         # Cell resolution in each direction
         box_shapes = self.unique_box_shapes()
-        box_rez = np.min(box_shapes, axis=0)
+        #box_rez = np.min(box_shapes, axis=0)
+        box_rez = np.min(box_shapes)
         box_arrays = []
         box_array_indices = []
         for lv in range(self.limit_level + 1):
@@ -246,6 +247,7 @@ class PlotfileCooker(object):
                 box_array[bidx_lo[0]:bidx_hi[0] + 1,
                           bidx_lo[1]:bidx_hi[1] + 1,
                           bidx_lo[2]:bidx_hi[2] + 1] = i
+                
                 lv_barray_indices.append([bidx_lo, bidx_hi])
             box_arrays.append(box_array)
             box_array_indices.append(lv_barray_indices)
@@ -265,12 +267,12 @@ class PlotfileCooker(object):
             barr_shape = self.box_arrays[lv].shape
             for box_index, indices in enumerate(self.barr_indices[lv]):
                 gmap = [[[], []], [[], []], [[], []]]
-                for coo in range(3):
+                for coo in range(self.ndims):
                     idx_lo = np.copy(indices)
                     idx_lo[0][coo] = max(idx_lo[0][coo] - 1, 0)
                     for bid in np.unique(self.box_arrays[lv][idx_lo[0][0]:idx_lo[1][0],
-                                                            idx_lo[0][1]:idx_lo[1][1],
-                                                            idx_lo[0][2]:idx_lo[1][2]]):
+                                                             idx_lo[0][1]:idx_lo[1][1],
+                                                             idx_lo[0][2]:idx_lo[1][2]]):
                         if bid != box_index:
                             gmap[coo][0].append(bid)
 
@@ -278,8 +280,8 @@ class PlotfileCooker(object):
                     idx_hi[1] += 1
                     idx_hi[1][coo] = min(idx_hi[1][coo] + 1, barr_shape[coo] - 1)
                     for bid in np.unique(self.box_arrays[lv][idx_hi[0][0]:idx_hi[1][0],
-                                                            idx_hi[0][1]:idx_hi[1][1],
-                                                            idx_hi[0][2]:idx_hi[1][2]]):
+                                                             idx_hi[0][1]:idx_hi[1][1],
+                                                             idx_hi[0][2]:idx_hi[1][2]]):
                         if bid != box_index:
                             gmap[coo][1].append(bid)
                 lv_gmap.append(gmap)
@@ -307,7 +309,6 @@ class PlotfileCooker(object):
         #           outpath)
         for pth in self.cell_paths[:limit_level + 1]:
             level_dir = pth
-            #print(os.path.join(os.getcwd(),outpath, level_dir))
             os.makedirs(os.path.join(os.getcwd(),outpath, level_dir), exist_ok=True)
             #shutil.copy(os.path.join(self.pfile, pth + '_H'),
             #            os.path.join(outpath, level_dir))
