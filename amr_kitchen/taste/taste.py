@@ -35,6 +35,85 @@ def mp_read_binary_data(args):
                 break
     return bfile_data
 
+def mp_fun_headers(args):
+    with open(args['bfile'], 'rb') as bf:
+        for ofs, idx, bid in zip(args['offsets'],
+                                 args['indices'],
+                                 args['box_ids']):
+            # This is pretty fast because we barely
+            # read any data (just one line per header)
+            # so we can test this first before iterating
+            # over the binary data
+            bf.seek(ofs)
+            h = bf.readline()
+            hidx, shape = indexes_and_shape_from_header(h)
+            # Check that the box indices match
+            # If they don't match the shape won't match
+            # so we don't have to check it 
+            if not np.array_equal(idx, hidx):
+                error = (f"The box number {bid} at level {args['lv']}"
+                         f" has the indices {idx[0]} to {idx[1]}"
+                         f" in the level header, and indices"
+                         f" {hidx[0]} to {hidx[1]} in the binary"
+                         f" header in file {args['bfile']}")
+
+                return error
+            # Check that the binary header has the right number of
+            # fields
+            if shape[-1] != args['nfields']:
+                error = (f"The number of field in the binary header"
+                         f" ({shape[-1]}) does not match the number"
+                         f" of fields in the plotfile header"
+                         f" ({args['nfields']}) for the box number"
+                         f" {bid} at level {args['lv']} in the binary file"
+                         f" {args['bfile']}")
+                return error
+
+def mp_fun_shape(args):
+    with open(args['bfile'], 'rb') as bf:
+        # Iterate with the index so we can infer what the
+        # next binary header is
+        # Read the first header
+        h = bf.readline()
+        for i, bid in enumerate(args['box_ids'][:-1]):
+            # We can assume the header has the right shape
+            # as it was validated before
+            shape = shape_from_header(h.decode('ascii'))
+            # 8 bytes per float64
+            nbytes = np.prod(shape)*8
+            # Skip to the next header
+            bf.seek(nbytes, 1)
+            # Indices of the next header
+            exp_indices = args['indices'][i+1]
+            # Byte string of the next header
+            exp_header = header_from_indices(exp_indices[0],
+                                             exp_indices[1],
+                                             args['nfields'])
+            h = bf.readline()
+            if h != exp_header:
+                error = (f"The binary data for box {bid}"
+                         f" at level {args['lv']} does not contain"
+                         f" the appropriate number of bytes"
+                         f" ({nbytes}) for the shape"
+                         f" {shape} in the binary file"
+                         f" {args['bfile']}")
+                return error
+        # Special case for the last box
+        shape = shape_from_header(h.decode('ascii'))
+        nbytes = np.prod(shape)*8
+        # Go to the last byte and store the position
+        bf.seek(nbytes, 1)
+        file_size = bf.tell()
+        # Compare with actual end of file
+        if file_size != bf.seek(0, 2):
+            error = (f"The binary data for box {args['box_ids'][-1]}"
+                     f" at level {args['lv']} does not contain"
+                     f" the appropriate number of bytes"
+                     f" ({nbytes}) for the shape"
+                     f" {shape} in the binary file"
+                     f" {args['bfile']}")
+            return error
+
 class Taster(PlotfileCooker):
     """
     A class to test the validity of AMReX plotfiles
@@ -103,13 +182,15 @@ class Taster(PlotfileCooker):
         """
         Main functions validating the sanity of the plotfile
         ___
-        Depending on the input arguments more or less 
+        Depending on the input arguments more or less
         attributes of the plotfile are tested.
         |1 - The number and shape of boxes |
         |2 - The mins and maxs             |
         |3 - The boxes' coordinates        |
         |4 - The NaNs                      |
         """
+        # Multiprocessing pool
+        self.pool = multiprocessing.Pool()
         # First check that no binary files are missing
         self.taste_plotfile_structure()
         # If flagged check that the boxes bounds match
@@ -221,8 +302,10 @@ class Taster(PlotfileCooker):
         of the binary headers match those in the
         level headers
         """
+
         for lv in range(self.limit_level + 1):
             lv_box_ids = np.arange(len(self.cells[lv]['indexes']))
+            mp_inputs = []
             for bfile in np.unique(self.cells[lv]['files']):
                 # Boxes in the current file
                 bfile_mask = np.array(self.cells[lv]['files']) == bfile
@@ -231,41 +314,20 @@ class Taster(PlotfileCooker):
                 box_ids = lv_box_ids[bfile_mask]
                 # Iterate over the sorted offsets so we don't jump 
                 # around the file 
-                # TODO: check if this is actually faster
                 indices = indices[np.argsort(offsets)]
                 box_ids = box_ids[np.argsort(offsets)]
                 offsets = np.sort(offsets)
-                with open(bfile, 'rb') as bf:
-                    for ofs, idx, bid in zip(offsets,
-                                             indices,
-                                             box_ids):
-                        # This is pretty fast because we barely
-                        # read any data (just one line per header)
-                        # so we can test this first before iterating
-                        # over the binary data
-                        bf.seek(ofs)
-                        h = bf.readline()
-                        hidx, shape = indexes_and_shape_from_header(h)
-                        # Check that the box indices match
-                        # If they don't match the shape won't match
-                        # so we don't have to check it 
-                        if not np.array_equal(idx, hidx):
-                            error = (f"The box number {bid} at level {lv}"
-                                     f" has the indices {idx[0]} to {idx[1]}"
-                                     f" in the level header, and indices"
-                                     f" {hidx[0]} to {hidx[1]} in the binary"
-                                     f" header in file {bfile}")
-                            self.raise_error(TastesBadError, error)
-                        # Check that the binary header has the right number of
-                        # fields
-                        if shape[-1] != len(self.fields):
-                            error = (f"The number of field in the binary header"
-                                     f" ({shape[-1]}) does not match the number"
-                                     f" of fields in the plotfile header"
-                                     f" ({len(self.fields)}) for the box number"
-                                     f" {bid} at level {lv} in the binary file"
-                                     f" {bfile}")
-                            self.raise_error(TastesBadError, error)
+                mp_in = {'bfile':bfile,
+                         'offsets':offsets,
+                         'indices':indices,
+                         'box_ids':box_ids,
+                         'lv':lv,
+                         'nfields':len(self.fields)}
+                mp_inputs.append(mp_in)
+            for mp_out in tqdm(self.pool.imap(mp_fun_headers, mp_inputs),
+                               total=len(mp_inputs)):
+                if mp_out is not None:
+                    self.raise_error(TastesBadError, mp_out)
 
     def taste_binary_shape(self):
         """
@@ -275,10 +337,13 @@ class Taster(PlotfileCooker):
         """
         if self.v > 0:
             print("Validating the boxes shape in the binary data")
+
+
         for lv in range(self.limit_level + 1):
             if self.v > 0:
                 print(f"Level {lv} ...")
             lv_box_ids = np.arange(len(self.cells[lv]['indexes']))
+            mp_inputs = []
             for bfile in np.unique(self.cells[lv]['files']):
                 # Boxes in the current file
                 bfile_mask = np.array(self.cells[lv]['files']) == bfile
@@ -287,54 +352,17 @@ class Taster(PlotfileCooker):
                 # Sort the box ids so they match what we read
                 # in the file 
                 box_ids = box_ids[np.argsort(offsets)]
-                # Read the binary file
-                with open(bfile, 'rb') as bf:
-                    # Iterate with the index so we can infer what the
-                    # next binary header is
-                    # Read the first header
-                    h = bf.readline()
-                    for i, bid in enumerate(box_ids[:-1]):
-                        # We can assume the header has the right shape
-                        # as it was validated before
-                        shape = shape_from_header(h.decode('ascii'))
-                        # 8 bytes per float64
-                        nbytes = np.prod(shape)*8
-                        # Skip to the next header
-                        # This is pretty fast because we only
-                        # read the header line and skip over the
-                        # data bytes but we can still validate that
-                        # the expected number of points is here
-                        bf.seek(nbytes, 1)
-                        # Indices of the next header
-                        exp_indices = self.cells[lv]['indexes'][box_ids[i+1]]
-                        # Byte string of the next header
-                        exp_header = header_from_indices(exp_indices[0],
-                                                         exp_indices[1],
-                                                         len(self.fields))
-                        h = bf.readline()
-                        if h != exp_header:
-                            error = (f"The binary data for box {bid}"
-                                     f" at level {lv} does not contain"
-                                     f" the appropriate number of bytes"
-                                     f" ({nbytes}) for the shape"
-                                     f" {shape} in the binary file"
-                                     f" {bfile}")
-                            self.raise_error(TastesBadError, error)
-                    # Special case for the last box
-                    shape = shape_from_header(h.decode('ascii'))
-                    nbytes = np.prod(shape)*8
-                    # Go to the last byte and store the position
-                    bf.seek(nbytes, 1)
-                    file_size = bf.tell()
-                    # Compare with actual end of file
-                    if file_size != bf.seek(0, 2):
-                        error = (f"The binary data for box {box_ids[-1]}"
-                                 f" at level {lv} does not contain"
-                                 f" the appropriate number of bytes"
-                                 f" ({nbytes}) for the shape"
-                                 f" {shape} in the binary file"
-                                 f" {bfile}")
-                        self.raise_error(TastesBadError, error)
+                bfile_indices = np.array(self.cells[lv]['indexes'])[box_ids]
+                mp_in = {'bfile':bfile,
+                         'box_ids': box_ids,
+                         'indices':bfile_indices,
+                         'nfields':len(self.fields),
+                         'lv':lv}
+                mp_inputs.append(mp_in)
+            for mp_out in self.pool.imap(mp_fun_shape, mp_inputs):
+                if mp_out is not None:
+                    self.raise_error(TastesBadError, mp_out)
+
             if self.v > 0:
                 print("Done!")
 
@@ -374,7 +402,6 @@ class Taster(PlotfileCooker):
                 bfile_data['maxs'] = maxs
                 bfile_data['mins'] = mins
                 bfile_data['bids'] = box_ids
-            pool = multiprocessing.Pool()
             # Iterate over every binary file
             for bfile, data_out in zip(bfile_data.keys(),
                                        pool.imap(mp_read_binary_data,
