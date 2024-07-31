@@ -79,10 +79,7 @@ def main():
     N_FIELDS = len(pck.fields)
     FIELD_INDEX = pck.fields[args.variable]
 
-    # Define the multiprocessing functions
-
-
-    # Covering grid array
+    # Covering grid array size
     grid_shape = pck.grid_sizes[pck.limit_level]
     dtype_size = np.array([], dtype=args.dtype).itemsize
     total_size = np.prod(grid_shape) * dtype_size
