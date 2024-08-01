@@ -44,7 +44,8 @@ def shape_from_header(h):
     start = np.array(start.split('(')[-1].replace(')','').split(','), dtype=int)
     stop = np.array(stop.replace('(', '').replace(')', '').split(','), dtype=int)
     shape = stop - start + 1
-    total_shape = [shape[0], shape[1], shape[2], nfields]
+    #total_shape = [shape[0], shape[1], shape[2], nfields]
+    total_shape = np.append(shape, nfields)
     return total_shape
 
 def indices_from_header(h):

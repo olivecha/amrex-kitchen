@@ -1,23 +1,133 @@
 import os
 import shutil
 import traceback
-import linecache
+import multiprocessing
 import numpy as np
 from tqdm import tqdm
-from amr_kitchen.utils import TastesBadError
+from amr_kitchen.utils import TastesBadError, shape_from_header
 
+def mp_read_box_single_field(args):
+    with open(args[0], 'rb') as bf:
+        bf.seek(args[1])
+        shape = shape_from_header(bf.readline().decode('ascii'))
+        bf.seek(np.prod(shape[:-1]) * args[2] * 8, 1)
+        data = np.fromfile(bf, 'float64', np.prod(shape[:-1]))
+    return data.reshape(shape[:-1], order='F')
+
+def mp_read_box_slice_field(args):
+    with open(args[0], 'rb') as bf:
+        bf.seek(args[1])
+        shape = shape_from_header(bf.readline().decode('ascii'))
+        start, stop = args[2].indices(shape[-1])[:2]
+        slice_size = stop - start
+        bf.seek(np.prod(shape[:-1]) * start * 8, 1)
+        data = np.fromfile(bf, 'float64', np.prod(shape[:-1]) * slice_size)
+    data = data.reshape(np.append(shape[:-1], slice_size), order='F')
+    return data[..., args[2]]
+        
+def mp_read_box_index_field(args):
+    diff = args[2][-1] - args[2][0] + 1
+    with open(args[0], 'rb') as bf:
+        bf.seek(args[1])
+        shape = shape_from_header(bf.readline().decode('ascii'))
+        bf.seek(np.prod(shape[:-1]) * args[2][0] * 8, 1)
+        data = np.fromfile(bf, 'float64', np.prod(shape[:-1])*diff)
+    data = data.reshape(np.append(shape[:-1], diff), order='F')
+    return data[..., np.array(args[2]) - args[2][0]]
+
+class LevelDataStream(object):
+    
+    def __init__(self, bfiles, offsets, field_arg):
+        self.bfiles = np.array(bfiles)
+        self.offsets = np.array(offsets)
+        self.size = len(bfiles)
+        self.farg = field_arg
+        if isinstance(self.farg, int):
+            self.read_fun = mp_read_box_single_field
+        elif isinstance(self.farg, slice):
+            self.read_fun = mp_read_box_slice_field
+        elif (isinstance(self.farg, list) or
+              isinstance(self.farg, np.ndarray)):
+            self.farg = np.array(self.farg)
+            assert self.farg.ndim == 1, "Field slice indices must be one dimensional"
+            self.read_fun = mp_read_box_index_field
+            
+    def __getitem__(self, idx):
+        if isinstance(idx, int):
+            return self.read_fun((self.bfiles[idx],
+                                  self.offsets[idx],
+                                  self.farg))
+        elif isinstance(idx, slice):
+            slice_size = len(range(*idx.indices(self.size)))
+            pool = multiprocessing.Pool()
+            return pool.map(self.read_fun,
+                            zip(self.bfiles[idx],
+                                self.offsets[idx],
+                                [self.farg]*slice_size))
+        elif (isinstance(idx, list) or
+              isinstance(idx, np.ndarray)):
+            idx = np.array(idx)
+            assert idx.ndim == 1, "Box slice indices must be one dimensional"
+            pool = multiprocessing.Pool()
+            return pool.map(self.read_fun,
+                            zip(self.bfiles[idx],
+                                self.offsets[idx],
+                                [self.farg]*(idx[-1] - idx[0] + 1)))
+        
+    def __iter__(self):
+        pool = multiprocessing.Pool()
+        return pool.imap(self.read_fun,
+                         zip(self.bfiles,
+                             self.offsets,
+                             [self.farg]*len(self.bfiles)))
+
+class LevelDataSelector(object):
+    
+    def __init__(self, fields, boxes, field_arg, limit_level):
+        # Convert key to field index
+        if isinstance(field_arg, str):
+            self.farg = fields[field_arg]
+        # Already index based
+        else:
+            self.farg = field_arg
+        self.boxes = boxes
+        self.fields = fields
+        self.limit_level = limit_level
+        
+    def __getitem__(self, key):
+        if key > self.limit_level:
+            raise ValueError((f"The maximum AMR level of the plotfile"
+                              f" is {self.limit_level}"))
+        return LevelDataStream(self.boxes[key]['files'],
+                               self.boxes[key]['offsets'],
+                               self.farg)
 
 class PlotfileCooker(object):
 
-    def __init__(self, plotfile, limit_level=None, header_only=False,
-                 validate_mode=False,  maxmins=False, ghost=False):
+    def __init__(self, 
+                 plotfile_path: str, 
+                 limit_level: int = None, 
+                 header_only: bool = False,
+                 validate_mode: bool = False,  
+                 maxmins: bool = False, 
+                 ghost: bool = False):
         """
         Parse the header data and save as attributes
+        ___
+        plotfile_path: path to the plotfile directory
+        limit_level: maximum adaptive mesh refinement level
+                     considered when reading the headers
+        header_only: only read the main plotile header (plotfile/Header)
+                     (This is much faster than reading all the box data)
+        validate_mode: do not fail when an error is encountered
+                       (This can be used to find out problems in a plotfile)
+        maxmins: if True the maximum and mimimum values of each field in the
+                 boxes are read (a bit slower)
+        ghost: if True the ghost cells around each box are computed by creating
+               3D arrays where the value is the index of the box for each level
         """
-        # TODO: Add a description of what the argument do to
-        # the docstring
-        self.pfile = plotfile
-        filepath = os.path.join(plotfile, 'Header')
+        self.pfile = plotfile_path
+        filepath = os.path.join(self.pfile, 'Header')
         with open(filepath) as hfile:
             self.version = hfile.readline()
             # field names
@@ -49,8 +159,12 @@ class PlotfileCooker(object):
             # Define the max level we read
             if limit_level is None:
                 self.limit_level = self.max_level
-            else:
+            elif limit_level <= self.max_level:
                 self.limit_level=limit_level
+            else:
+                raise ValueError((f"The limit level must be less or equal than"
+                                  f" the maximum AMR level of the plotfile:"
+                                  f" {limit_level} > {self.max_level}"))
             # Read the box geometry
             try:
                 self.box_centers, self.boxes = self.read_boxes(hfile)
@@ -122,6 +236,9 @@ class PlotfileCooker(object):
         # for lv in range(self.limit_level + 1):
         #     if 
         return True
+
+    def __getitem__(self, key):
+        return LevelDataSelector(self.fields, self.cells, key, self.limit_level)
 
     def read_boxes(self, hfile):
         """
