@@ -24,7 +24,7 @@ def mp_read_box_slice_field(args):
         data = np.fromfile(bf, 'float64', np.prod(shape[:-1]) * slice_size)
     data = data.reshape(np.append(shape[:-1], slice_size), order='F')
     return data[..., args[2]]
-        
+
 def mp_read_box_index_field(args):
     diff = args[2][-1] - args[2][0] + 1
     with open(args[0], 'rb') as bf:
@@ -35,8 +35,73 @@ def mp_read_box_index_field(args):
     data = data.reshape(np.append(shape[:-1], diff), order='F')
     return data[..., np.array(args[2]) - args[2][0]]
 
+def mp_read_bfile_single_field(args):
+    file_data = []
+    with open(args[0], 'rb') as bf:
+        while True:
+            try:
+                shape = shape_from_header(bf.readline().decode('ascii'))
+                bf.seek(np.prod(shape[:-1]) * args[1] * 8, 1)
+                data = np.fromfile(bf, 'float64', np.prod(shape[:-1]))
+                bf.seek(np.prod(shape[:-1]) * (shape[-1] - args[1] - 1) * 8, 1)
+                file_data.append(data.reshape(shape[:-1], order='F'))
+            except:
+                break
+    return file_data
+
+def mp_read_bfile_slice_field(args):
+    file_data = []
+    with open(args[0], 'rb') as bf:
+        while True:
+            try:
+                shape = shape_from_header(bf.readline().decode('ascii'))
+                start, stop = args[1].indices(shape[-1])[:2]
+                slice_size = stop - start
+                bf.seek(np.prod(shape[:-1]) * start * 8, 1)
+                data = np.fromfile(bf, 'float64', np.prod(shape[:-1]) * slice_size)
+                data = data.reshape(np.append(shape[:-1], slice_size), order='F')
+                file_data.append(data[..., args[1]])
+            except:
+                break
+    return file_data
+
+def mp_read_bfile_index_field(args):
+    diff = args[1][-1] - args[1][0] + 1
+    file_data = []
+    with open(args[0], 'rb') as bf:
+        while True:
+            try:
+                shape = shape_from_header(bf.readline().decode('ascii'))
+                bf.seek(np.prod(shape[:-1]) * args[1][0] * 8, 1)
+                data = np.fromfile(bf, 'float64', np.prod(shape[:-1])*diff)
+                data = data.reshape(np.append(shape[:-1], diff), order='F')
+                file_data.append(data[..., np.array(args[1]) - args[1][0]])
+            except:
+                break
+    return file_data
+
+class LevelDataIterator(object):
+
+    def __init__(self, fun, bfiles, field_arg):
+        pool = multiprocessing.Pool()
+        self.iterator = pool.imap(fun,
+                                  zip(bfiles,
+                                      [field_arg]*len(bfiles)))
+        self._data = self.iterator.__next__().__iter__()
+
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            return self._data.__next__()
+        except StopIteration:
+            self._data = self.iterator.__next__().__iter__()
+            return self._data.__next__()
+
 class LevelDataStream(object):
-    
+
     def __init__(self, bfiles, offsets, field_arg):
         self.bfiles = np.array(bfiles)
         self.offsets = np.array(offsets)
@@ -44,14 +109,17 @@ class LevelDataStream(object):
         self.farg = field_arg
         if isinstance(self.farg, int):
             self.read_fun = mp_read_box_single_field
+            self.file_fun = mp_read_bfile_single_field
         elif isinstance(self.farg, slice):
             self.read_fun = mp_read_box_slice_field
+            self.file_fun = mp_read_bfile_slice_field
         elif (isinstance(self.farg, list) or
               isinstance(self.farg, np.ndarray)):
             self.farg = np.array(self.farg)
             assert self.farg.ndim == 1, "Field slice indices must be one dimensional"
             self.read_fun = mp_read_box_index_field
-            
+            self.file_fun = mp_read_bfile_index_field
+
     def __getitem__(self, idx):
         if isinstance(idx, int):
             return self.read_fun((self.bfiles[idx],
@@ -73,16 +141,14 @@ class LevelDataStream(object):
                             zip(self.bfiles[idx],
                                 self.offsets[idx],
                                 [self.farg]*(idx[-1] - idx[0] + 1)))
-        
+
     def __iter__(self):
-        pool = multiprocessing.Pool()
-        return pool.imap(self.read_fun,
-                         zip(self.bfiles,
-                             self.offsets,
-                             [self.farg]*len(self.bfiles)))
+        return LevelDataIterator(self.file_fun,
+                                 np.unique(self.bfiles),
+                                 self.farg)
 
 class LevelDataSelector(object):
-    
+
     def __init__(self, fields, boxes, field_arg, limit_level):
         # Convert key to field index
         if isinstance(field_arg, str):
@@ -93,7 +159,7 @@ class LevelDataSelector(object):
         self.boxes = boxes
         self.fields = fields
         self.limit_level = limit_level
-        
+
     def __getitem__(self, key):
         if key > self.limit_level:
             raise ValueError((f"The maximum AMR level of the plotfile"
@@ -104,12 +170,12 @@ class LevelDataSelector(object):
 
 class PlotfileCooker(object):
 
-    def __init__(self, 
-                 plotfile_path: str, 
-                 limit_level: int = None, 
+    def __init__(self,
+                 plotfile_path: str,
+                 limit_level: int = None,
                  header_only: bool = False,
-                 validate_mode: bool = False,  
-                 maxmins: bool = False, 
+                 validate_mode: bool = False,
+                 maxmins: bool = False,
                  ghost: bool = False):
         """
         Parse the header data and save as attributes
