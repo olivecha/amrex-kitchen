@@ -59,9 +59,11 @@ def mp_read_bfile_slice_field(args):
                 slice_size = stop - start
                 bf.seek(np.prod(shape[:-1]) * start * 8, 1)
                 data = np.fromfile(bf, 'float64', np.prod(shape[:-1]) * slice_size)
+                bf.seek(np.prod(shape[:-1]) * (shape[-1] - slice_size - start) * 8, 1)
                 data = data.reshape(np.append(shape[:-1], slice_size), order='F')
                 file_data.append(data[..., args[1]])
-            except:
+            except Exception as e:
+                print(type(e), e)
                 break
     return file_data
 
@@ -73,7 +75,8 @@ def mp_read_bfile_index_field(args):
             try:
                 shape = shape_from_header(bf.readline().decode('ascii'))
                 bf.seek(np.prod(shape[:-1]) * args[1][0] * 8, 1)
-                data = np.fromfile(bf, 'float64', np.prod(shape[:-1])*diff)
+                data = np.fromfile(bf, 'float64', np.prod(shape[:-1]) * diff)
+                bf.seek(np.prod(shape[:-1]) * (shape[-1] - args[1][-1] - 1) * 8, 1)
                 data = data.reshape(np.append(shape[:-1], diff), order='F')
                 file_data.append(data[..., np.array(args[1]) - args[1][0]])
             except:
