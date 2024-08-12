@@ -126,16 +126,3 @@ def global2local(indices, refindices, n_ghost=1):
              indices[1][1] - j_start,
              indices[1][2] - k_start]]
 
-def expand_array3d(arr, factor):
-    """
-    Data reading utility
-    ----
-    Expand lower resolution 2D array by [factor]
-    to broadcast it to a higher level grid.
-    This allows broadcasting lower resolution arrays to a higher 
-    AMR level grid without altering the data.
-    ----
-    """
-    return np.repeat(np.repeat(np.repeat(arr, factor, axis=0),
-                               factor, axis=1),
-                     factor, axis=2)
