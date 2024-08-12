@@ -597,20 +597,19 @@ class PlotfileCooker(object):
             # Other binary files
             bfiles_2 = np.array(other.cells[lv]['files'])[box_indices]
             # Other offsets
-            offsets_2 = np.array(other.cells[lv]['offsets'][box_indices]
+            offsets_2 = np.array(other.cells[lv]['offsets'])[box_indices]
             # Offsets of the boxes in the binaries
             offsets_bf1 = np.array(self.cells[lv]['offsets'])[box_indices]
             offsets_bf2 = np.array(other.cells[lv]['offsets'])[box_indices]
             # Path to the combined binary files (for Windows)
             bfile_r1 = os.path.join(os.getcwd(), bf1)
-            bfile_r2 = os.path.join(os.getcwd(), bf2)
+            bfile_r2 = os.path.join(os.getcwd(), bfiles_2[0])
             # Path to the new binary file
             bfile_w = os.path.join(os.getcwd(),
                                    pltout,
                                    os.path.basename(os.path.split(bfile_r1)[0]),
                                    os.path.basename(bfile_r1))
             mp_call = {"bfile_r1":bfile_r1,
-                       "offst_r1":offsets_bf1,
                        "bfile_r2":bfile_r2,
                        "offst_r2":offsets_bf2,
                        "bfile_w":bfile_w}
