@@ -28,6 +28,9 @@ setuptools.setup(
             "colander = amr_kitchen.colander.cli:main",
             "taste = amr_kitchen.taste.cli:main",
             "chef = amr_kitchen.chef.cli:main",
+            "pestle = amr_kitchen.pestle.cli:main",
+            "marinate = amr_kitchen.marinate:main",
+            "minuterie = amr_kitchen.minuterie:main",
             "menu = amr_kitchen.menu.cli:main",
         ]
     }

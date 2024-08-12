@@ -5,9 +5,6 @@
 This is a collection of tools to perform post processing and visualization tasks 
 on the AMReX plotfile format. For the moment all tools are written in python
 and make use of the `multiprocessing` module when advantageous to do so. 
-All tools are tested on large (> 1TB) plotfiles with multiple fields and AMR Levels.
-The computationaly intensive tools were optimized to work best on a single node
-of a CPU cluster with a large number of CPUs (40), and a decent amount of RAM (> 100 GB). 
 
 A kitchen themed naming convention is employed as it helps remembering the
 command names and conveys a positive sentiment. It also makes sense of the
@@ -66,6 +63,15 @@ Then install the amrex-kitchen module:
 pip install -e .
 ```
 The `-e` flag makes the source files editable so reinstalling after each `git pull` is not necessary.
+
+## Performance
+
+All tools are tested on large (> 1TB) plotfiles with around 40 fields and 5 AMR Levels.
+The computationaly intensive tools were optimized to work best on a single node
+of a CPU cluster with a large number of CPUs (40), and a decent amount of RAM (> 100 GB).
+
+Compared to the tools proposed in the AMReX repository, what is proposed here is arguably a bit slower when a large amount of computing
+power is available, as the `multiprocessing` module is limited to a single compute node. However, the tools proposed here work well with arbitrarly large plotfiles, and scale linearly with plotfile size (with some exceptions).
 
 # Documentation
 

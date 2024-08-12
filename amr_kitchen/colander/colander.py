@@ -87,7 +87,8 @@ class Colander(PlotfileCooker):
                  plotfile=None,
                  limit_level=None,
                  output=None,
-                 variables=None):
+                 variables=None,
+                 allow_missing=True):
         """
         Constructor for the Colander data container
         args : parsed command line arguments
@@ -110,12 +111,13 @@ class Colander(PlotfileCooker):
                 self.kept_names.append(f)
         # Case for arbitrary number of variables
         else:
-            self.kept_names = variables
+            self.kept_names = [v for v in variables if v in self.fields]
             for v in variables:
                 try:
                     self.kept_fields.append(self.fields[v])
                 except KeyError:
-                    raise ValueError(f"Field {v} not found in file")
+                    if not allow_missing:
+                        raise ValueError(f"Field {v} not found in file")
 
     def strain(self):
         """
@@ -133,7 +135,6 @@ class Colander(PlotfileCooker):
                                          'Cell_H')
             # All indexes of the boxes at lv
             box_indexes = np.arange(ncells)
-
             # Multiprocessing args list
             mp_calls = []
             box_index_map = []
