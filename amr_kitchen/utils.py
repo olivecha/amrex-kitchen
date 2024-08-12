@@ -70,9 +70,9 @@ def header_from_indices(start, stop, nfields):
     nfields: number of fields in the plotfile
     """
     header_const = "FAB ((8, (64 11 52 0 1 12 0 1023)),(8, (8 7 6 5 4 3 2 1)))"
-    header_indices = (f"(({start[0]},{start[1]},{start[2]})"
-                      f" ({stop[0]},{stop[1]},{stop[2]})"
-                      f" (0,0,0)) {nfields}\n")
+    header_indices = (f"((" + ','.join([str(s) for s in start]) + ')'
+                      f" (" + ','.join([str(s) for s in stop]) + ")"
+                      f" (" + ','.join(["0" for _ in stop]) + f")) {nfields}\n")
     header = header_const + header_indices
     return header.encode('ascii')
 
@@ -126,16 +126,3 @@ def global2local(indices, refindices, n_ghost=1):
              indices[1][1] - j_start,
              indices[1][2] - k_start]]
 
-def expand_array3d(arr, factor):
-    """
-    Data reading utility
-    ----
-    Expand lower resolution 2D array by [factor]
-    to broadcast it to a higher level grid.
-    This allows broadcasting lower resolution arrays to a higher 
-    AMR level grid without altering the data.
-    ----
-    """
-    return np.repeat(np.repeat(np.repeat(arr, factor, axis=0),
-                               factor, axis=1),
-                     factor, axis=2)
