@@ -137,6 +137,8 @@ class LevelDataStream(object):
                                 [self.farg]*slice_size))
         elif (isinstance(idx, list) or
               isinstance(idx, np.ndarray)):
+            if len(idx) == 0:
+                return []
             idx = np.array(idx)
             assert idx.ndim == 1, "Box slice indices must be one dimensional"
             pool = multiprocessing.Pool()
@@ -152,6 +154,37 @@ class LevelDataStream(object):
         return LevelDataIterator(self.file_fun,
                                  np.unique(self.bfiles),
                                  self.farg)
+    def iter(self, idx):
+        """
+        Manual data iterator to support reading data
+        on the fly for slices
+        """
+        if isinstance(idx, int):
+            return self.read_fun((self.bfiles[idx],
+                                  self.offsets[idx],
+                                  self.farg))
+        elif isinstance(idx, slice):
+            slice_size = len(range(*idx.indices(self.size)))
+            pool = multiprocessing.Pool()
+            return pool.imap(self.read_fun,
+                            zip(self.bfiles[idx],
+                                self.offsets[idx],
+                                [self.farg]*slice_size))
+        elif (isinstance(idx, list) or
+              isinstance(idx, np.ndarray)):
+            if len(idx) == 0:
+                return []
+            idx = np.array(idx)
+            assert idx.ndim == 1, "Box slice indices must be one dimensional"
+            pool = multiprocessing.Pool()
+            if idx.dtype == int:
+                count = len(idx)
+            elif idx.dtype == bool:
+                count = np.count_nonzero(idx)
+            return pool.imap(self.read_fun,
+                            zip(self.bfiles[idx],
+                                self.offsets[idx],
+                                [self.farg]*count))
 
 class LevelDataSelector(object):
 
@@ -262,6 +295,10 @@ class PlotfileCooker(object):
                                           f" {catched_tback}"))
                 else:
                     raise e
+
+        # Compute the global 1D grids
+        self.grids = self.compute_global_grids()
+
         # Read the cell data
         if not header_only:
             try:
@@ -339,7 +376,7 @@ class PlotfileCooker(object):
 
         ```
         # Temperature data at level 0:
-        PlotfileCooker["temp"][0]  
+        PlotfileCooker["temp"][0]
         ```
 
         ```
@@ -355,11 +392,11 @@ class PlotfileCooker(object):
             pass
         ```
 
-        The third layer defines from which AMR box the data is selected. 
+        The third layer defines from which AMR box the data is selected.
         integer, slice and array like indices are supported. If the index
         argument is not an integer, multiprocessing is used to read the data.
         Because the shape of the data is not consistent between boxes, a list
-        of arrays is returned for non integer slices. 
+        of arrays is returned for non integer slices.
         The box data shape has the format `(shape_x, shape_y, shape_z, fields)`.
 
         ```
@@ -539,6 +576,42 @@ class PlotfileCooker(object):
         shapes = [tuple(shape) for shape in shapes]
         return shapes
 
+    def compute_global_grids(self) -> list[np.ndarray[float]]:
+        """
+        Compute the plotfile grids for each level and dimension
+        grids are defined such as grid[box_indices] = box_coordinate
+        """
+        grids = []
+        for lv in range(self.limit_level + 1): 
+            lvgrids = []
+            for coord in range(self.ndims):
+                lv_dx = self.dx[lv][coord]/2
+                grid = np.linspace(self.geo_low[coord] + lv_dx,
+                                   self.geo_high[coord] - lv_dx,
+                                   self.grid_sizes[lv][coord])
+                lvgrids.append(grid)
+            grids.append(lvgrids)
+        return grids
+
+    def box_points(self, lv: int, bid: int) -> (np.ndarray[float],
+                                                np.ndarray[float],
+                                                np.ndarray[float]):
+        """
+        Return 3 x (shape) array of the box coordinate points in an AMR box
+        lv: Level of the box
+        bid: index of the box
+        """
+        indices = self.cells[lv]['indexes'][bid]
+        shape = indices[1] - indices[0] + 1
+        x_loc = self.grids[lv][0][indices[0][0]:indices[1][0]+1]
+        y_loc = self.grids[lv][1][indices[0][1]:indices[1][1]+1]
+        z_loc = self.grids[lv][2][indices[0][2]:indices[1][2]+1]
+
+        x_box = np.repeat([np.repeat([x_loc], shape[1], axis=0)], shape[2], axis=0).T
+        y_box = np.repeat([np.repeat([y_loc], shape[2], axis=0).T], shape[0], axis=0)
+        z_box = np.repeat([np.repeat([z_loc], shape[1], axis=0)], shape[0], axis=0)
+        return x_box, y_box, z_box
+
     """
     Iterators to loop over plotfile data manually
     """
@@ -606,7 +679,7 @@ class PlotfileCooker(object):
                       "lv":lv,
                       "off2":off2}
             yield output
-            
+
     def map_bfile_offsets(self, lv: int) -> list[np.ndarray[int]]:
         """
         Compute the index map of the AMR box offsets
@@ -742,7 +815,6 @@ class PlotfileCooker(object):
                 box_array[bidx_lo[0]:bidx_hi[0] + 1,
                           bidx_lo[1]:bidx_hi[1] + 1,
                           bidx_lo[2]:bidx_hi[2] + 1] = i
-                
                 lv_barray_indices.append([bidx_lo, bidx_hi])
             box_arrays.append(box_array)
             box_array_indices.append(lv_barray_indices)
