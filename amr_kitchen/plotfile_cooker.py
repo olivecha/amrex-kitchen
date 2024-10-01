@@ -114,6 +114,8 @@ class LevelDataSelector(object):
         return LevelDataStream(self.boxes[key]['files'],
                                self.boxes[key]['offsets'],
                                self.farg)
+    def __call__(self, x, y, z):
+        pass
 
 class PlotfileCooker(object):
 
