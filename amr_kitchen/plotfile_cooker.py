@@ -92,7 +92,6 @@ class LevelDataIterator(object):
                                       [field_arg]*len(bfiles)))
         self._data = self.iterator.__next__().__iter__()
 
-
     def __iter__(self):
         return self
 

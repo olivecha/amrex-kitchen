@@ -19,7 +19,7 @@ def main():
             help=("Output path of the generated plotfile"
                  " (defaults to input_plotfile'_ck' "))
     parser.add_argument(
-            "--recipe", "-r", type=str, 
+            "--recipe", "-r", type=str,
             help=("Recipe used to add new data, available recipes are:\n"
                   "- 'HRR': Heat release rate [W/m^3]\n"
                   "- 'ENT': Sensible enthalpy []\n"

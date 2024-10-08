@@ -55,31 +55,6 @@ def check_intersect(box: np.ndarray[float],
     else:
         return False
 
-# Read the data at the finest level
-def mp_slice_box(args):
-    pck = args[0]
-    bid = args[1]
-    lv = 4
-    data = pck[FIELD_ID][lv][bid]
-    x, y, z = pck.box_points(lv, bid)
-    P = plane_fun(np.array([x, y, z]).T).T
-    if not (np.max(P) > 0 and np.min(P) < 0):
-        return
-    points, faces, normals, values = skimage.measure.marching_cubes(P, level=0)
-    plane_data = scipy.ndimage.map_coordinates(data, points.T, order=1, mode='nearest')
-    indices = pck.cells[lv]['indexes'][bid]
-    points += indices[0]
-    points[:, 0] /= (pck.grid_sizes[lv][0] - 1)
-    points[:, 1] /= (pck.grid_sizes[lv][1] - 1)
-    points[:, 2] /= (pck.grid_sizes[lv][2] - 1)
-    points[:, 0] *= (pck.geo_high[0] - pck.dx[lv][0]/2 - pck.geo_low[0] + pck.dx[lv][0]/2) 
-    points[:, 0] += pck.geo_low[0] + pck.dx[lv][0]/2
-    points[:, 1] *= (pck.geo_high[1] - pck.dx[lv][1]/2 - pck.geo_low[1] + pck.dx[lv][1]/2) 
-    points[:, 1] += pck.geo_low[1] + pck.dx[lv][1]/2
-    points[:, 2] *= (pck.geo_high[2] - pck.dx[lv][2]/2 - pck.geo_low[2] + pck.dx[lv][2]/2) 
-    points[:, 2] += pck.geo_low[2] + pck.dx[lv][2]/2
-    return data, points, faces
-
 def main():
 # INPUTS
     plotfile = sys.argv[1]
@@ -183,8 +158,8 @@ def main():
             plane_data = scipy.ndimage.map_coordinates(data, points.T, order=1, cval=1, mode='constant')
             # Remove masked points from the surface
             removed_points = np.arange(points.shape[0])[mask_data]
-            faces_mask = np.any(np.isin(faces, removed_points), axis=1)
-            faces = faces[faces_mask, :]
+            #faces_mask = np.any(np.isin(faces, removed_points), axis=1)
+            #faces = faces[faces_mask, :]
             # Convert box indices to global coordinates
             indices = pck.cells[lv]['indexes'][bid]
             points += indices[0]
@@ -202,8 +177,6 @@ def main():
             point_count += points.shape[0]
             all_levels.append(np.ones(points.shape[0]) * lv)
             all_data.append(plane_data)
-
-
 
     lv = 4
     print(f"Level {lv}")
@@ -247,7 +220,7 @@ def main():
     # Unform grid to which the data is interpolated
     x_plane = np.linspace(points_e1.min(),
                           points_e1.max(),
-                          4096)
+                          pck.grid_sizes[lv][0])
     # Keep the mesh resolution for the stretched coordinate
     # TODO: handle cases where dx =/= dy =/= dz by finding
     # the axis the most aligned with the second plane
@@ -256,7 +229,7 @@ def main():
     # basis gives positive coordinates
     y_plane = np.arange(np.abs(points_e2).min(),
                         np.abs(points_e2).max() + 1e-16,
-                        7.8125e-05)
+                        pck.dx[lv][0])
     print("Interpolating on uniform grid")
     itrp = NearestNDInterpolator(np.transpose([points_e1,
                                                np.abs(points_e2)]),
