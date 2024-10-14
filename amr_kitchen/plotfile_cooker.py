@@ -333,7 +333,7 @@ class PlotfileCooker(object):
         **Warning:** the iterator returned by `PlotfileCooker["field"][lv]`
         loops over the binary files without preserving the AMR box order
         in the plotfile headers as it is about 10x faster. To preserve box
-        order use: `for box_data in PlotfileCooker["field"][lv][:]:`.
+        order use: `for box_data in PlotfileCooker["field"][lv][:]`.
         If the plotfile is large this might use a lot of memory. 
         Instead, the box indices can be used to read boxes one at a time:
         ```
