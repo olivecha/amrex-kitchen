@@ -187,7 +187,7 @@ class LevelDataStream(object):
 
 class LevelDataSelector(object):
 
-    def __init__(self, fields, boxes, field_arg, limit_level):
+    def __init__(self, fields, cells, field_arg, limit_level, boxes = None):
         # Convert key to field index
         if isinstance(field_arg, str):
             field_arg = fields[field_arg]
@@ -203,17 +203,55 @@ class LevelDataSelector(object):
             raise IndexError((f"The field indexing [{field_arg}] is not"
                               f" compatible with the number of fields"
                               f" in the plotfile ({len(fields)})"))
-        self.boxes = boxes
+        self.cells = cells
         self.fields = fields
         self.limit_level = limit_level
+        self.boxes = boxes
 
     def __getitem__(self, key):
         if key > self.limit_level:
             raise ValueError((f"The maximum AMR level of the plotfile"
                               f" is {self.limit_level}"))
-        return LevelDataStream(self.boxes[key]['files'],
-                               self.boxes[key]['offsets'],
+        return LevelDataStream(self.cells[key]['files'],
+                               self.cells[key]['offsets'],
                                self.farg)
+    
+    def __call__(self, cord_x, cord_y, cord_z = None):
+        if cord_z == None:
+            key = (cord_x, cord_y)
+        else:
+            key = (cord_x, cord_y, cord_z)
+
+        # Input validation
+        if self.boxes == None:
+            raise KeyError("PlotfileCooker object was not initiated with a True 'point' argument")
+        if len(key) != self.limit_level+1:
+            raise KeyError(f"Desired point {key} of {len(key)}d size doesn't correlate with the {self.limit_level+1}d size of the plotfile")
+
+        # Let's see in which box does the point belong 
+        matching_indicies = []
+        for box in range(len(self.boxes[self.limit_level])):
+            sous_box = self.boxes[self.limit_level][box]
+            for component in range(len(key)):
+                if key[component] < sous_box[component][0] or key[component] > sous_box[component][-1]:
+                    break
+            else:
+                matching_indicies.append(box)
+
+        # More validation and bug catching
+        if len(matching_indicies) == 0:
+            raise KeyError(f"An unexpected error occured.\n Chosen point {key} not related to any box in the plotfile")
+        # If the point is in only one box 
+        elif len(matching_indicies) == 1:
+            return self[self.limit_level][matching_indicies[0]]
+        # If the point is between more than one box
+        else:
+            conc_array = self[self.limit_level][matching_indicies[0]]
+            for index in range(1, len(matching_indicies)):
+                # The data of all boxes that contain the point gets concatenated 
+                conc_array = np.concatenate((conc_array, self[self.limit_level][matching_indicies[index]]))
+            return conc_array
+        
 
 class PlotfileCooker(object):
 
@@ -223,7 +261,8 @@ class PlotfileCooker(object):
                  header_only: bool = False,
                  validate_mode: bool = False,
                  maxmins: bool = False,
-                 ghost: bool = False):
+                 ghost: bool = False,
+                 point: bool = False):
         """
         Parse the header data and save as attributes
         ___
@@ -238,6 +277,8 @@ class PlotfileCooker(object):
                  boxes are read (a bit slower)
         ghost: if True the ghost cells around each box are computed by creating
                3D arrays where the value is the index of the box for each level
+        point: if True the plotfile's boxes will be parsed through the overloaded 
+                  __getitem__ method to allow getting data at a specific point 
         """
         self.pfile = plotfile_path
         filepath = os.path.join(self.pfile, 'Header')
@@ -324,6 +365,7 @@ class PlotfileCooker(object):
             else:
                 raise ValueError(("Ghost boxes are not available for plotfiles with"
                                   " ndims < 3"))
+        self.point = point
 
     """
     Methods defining operator overloading
@@ -443,7 +485,10 @@ class PlotfileCooker(object):
             box_data = PlotfileCooker["field"][lv][i]
         ```
         """
-        return LevelDataSelector(self.fields, self.cells, key, self.limit_level)
+        if self.point:
+            return LevelDataSelector(self.fields, self.cells, key, self.limit_level, self.boxes)
+        else:
+            return LevelDataSelector(self.fields, self.cells, key, self.limit_level)
 
     """
     Method for constructing the class from plotfile mesh data
@@ -592,9 +637,9 @@ class PlotfileCooker(object):
             grids.append(lvgrids)
         return grids
 
-    def box_points(self, lv: int, bid: int) -> (np.ndarray[float],
+    def box_points(self, lv: int, bid: int) -> tuple[np.ndarray[float],
                                                 np.ndarray[float],
-                                                np.ndarray[float]):
+                                                np.ndarray[float]]:
         """
         Return 3 x (shape) array of the box coordinate points in an AMR box
         lv: Level of the box
