@@ -188,7 +188,7 @@ class LevelDataStream(object):
 
 class LevelDataSelector(object):
 
-    def __init__(self, fields, cells, field_arg, limit_level, boxes = None):
+    def __init__(self, fields, cells, field_arg, limit_level, boxes = None, dx = None):
         # Convert key to field index
         if isinstance(field_arg, str):
             field_arg = fields[field_arg]
@@ -208,6 +208,7 @@ class LevelDataSelector(object):
         self.fields = fields
         self.limit_level = limit_level
         self.boxes = boxes
+        self.dx = dx
 
     def __getitem__(self, key):
         if key > self.limit_level:
@@ -219,7 +220,7 @@ class LevelDataSelector(object):
     
     def __call__(self, *args):
 
-        point = args
+        point = np.array(args)
 
         # Input validation
         if len(point) == 0:
@@ -229,12 +230,11 @@ class LevelDataSelector(object):
         if len(point) != self.limit_level+1:
             raise KeyError(f"Desired point {point} of {len(point)}d size doesn't correlate with the {self.limit_level+1}d size of the plotfile")
 
-        # Find boxes containing point at each level
+        # Finds boxes containing point at each level
         box_matches = []
         for level in range(self.limit_level + 1):
             boxes = np.array(self.boxes[level])
-            # Handle 2D case
-            #print(boxes.shape)
+            # Handles 2D case
             # All with equals so we catch boundaries
             # Point in x is lower the all boxes upper lower bound in x
             box_match = (boxes[:, 0, 0] <= point[0]) & \
@@ -243,60 +243,103 @@ class LevelDataSelector(object):
                         (point[1] <= boxes[:, 1, 1]) & \
                         (boxes[:, 2, 0] <= point[2]) & \
                         (point[2] <= boxes[:, 2, 1])
-            # Only append if there are matches
+
+            # Only appends if there are matches
             if any(box_match):
                 matching_indices = np.where(box_match == True)[0]
                 box_matches.append(matching_indices)
 
-        # More validation and bug catching
-        if len(box_matches) == 0:
-            raise KeyError(f"An unexpected error occured.\n Chosen point {point} not related to any box in the plotfile")
-        
-        # If point is not between boxes
+        # Finest matching level
+        match_level = len(box_matches) - 1
+        dx = self.dx[match_level]
+        # Converts point to indices at this level
+        # Scales back by 0.5, because the domain starts at dx/2 (index = 0)
+        point_idx = (point / dx) - 0.5
+
+        # This only works if the point is not between boxes
         if len(box_matches[-1]) == 1:
-            # Finest matching level
             match_level = len(box_matches) - 1
             # 3D data for a single box at the finest matching level
             point_data = self[match_level][int(box_matches[match_level][0])]
             return point_data
             
         else:
-            # Testing if the point is located on a boundary shared only by boxes of the finest level 
+            # Testing if the point is at a boundary shared only by finest level boxes
             finest_containted = True
             for level_id in range(len(box_matches) - 1):
                 if len(box_matches[level_id]) != 1:
                     finest_containted = False
 
-            # If the point is contain in the finest level:
+            # If the point is only contained within the finest level:
             if finest_containted:
-                # Loading the related boxes at the finest level for interpolation 
-                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[-1]]
-                # Faire un array qui contient les boxes dans 3D
-                # Calculer le point avec map_coordinates
+                # Loading the relevant boxes and their indices at the finest level to interpolate
+                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[self.limit_level]]
+                finest_boxes = self[self.limit_level][box_matches[self.limit_level]]
+                # Lowest and highest indices in each dimension from matched boxes
+                indices_lo = np.min(finest_boxes_indices[:, 0, :], axis=0)
+                indices_hi = np.max(finest_boxes_indices[:, 1, :], axis=0) + 1
+                # Expected shape is high indices minus low indices
+                conc_shape = indices_hi - indices_lo
+                conc_array = np.zeros(conc_shape)
+                # Rescales the indices by the smallest value
+                rescaled_box_indices = finest_boxes_indices.copy()
+                # Smallest indices in each dimension so indices start at 0
+                rescaled_box_indices[:, :, 0] -= indices_lo[0]
+                rescaled_box_indices[:, :, 1] -= indices_lo[1]
+                rescaled_box_indices[:, :, 2] -= indices_lo[2]
+                # Populates the concatenated array with the data
+                for box, idx in zip(finest_boxes, rescaled_box_indices):
+                    conc_array[idx[0, 0]: idx[1, 0] + 1,
+                            idx[0, 1]: idx[1, 1] + 1,
+                            idx[0, 2]: idx[1, 2] + 1] = box
 
-                conc_array = self[self.limit_level][int(box_matches[self.limit_level][0])]
-                for index in range(1, len(box_matches[self.limit_level])):
-                    # The data of all boxes that contain the point gets concatenated 
-                    conc_array = np.concatenate((conc_array, self[self.limit_level][int(box_matches[self.limit_level][index])]))
-
-                # Global point indices (double check this if the boundary are well handled (x = 0 -> idx = 0))
-                point_indices = (finest_boxes_indices / (self.geo_high - np.array(self.geo_low))) * self.grid_sizes[self.limit_level]
-                # point indices local to box 
-                point_indices -= finest_boxes_indices[0]
-                # Compute the point value
-                point_data = map_coordinates(conc_array, np.transpose([point_indices]))
+                # Rescales the index point to local indices
+                point_local = point_idx - indices_lo
+                # Interpolates the local point on the constructed array
+                point_data = map_coordinates(conc_array, np.transpose([point_local]))
                 return point_data
-        """
-            # Si le point est pas contenu:
+        
+            # If the point is at a boundary shared by boxes of different levels:
             else:
-                # Creer un array 3D qui peut contenir les donnes de tous les niveaux:
-                data_array = np.zeros((32 -  0, 16 - 0, 32 - 16)) # idx_max_scaled_to_finest_level + 1 - idx_min_scaled_to_finest
-                # Ajouter les donnes interpolees au niveau le plus fin (avec map_coordinates) en commencant par le niveau le plus bas
-                data_array[box1[0][0] - 0: box1[1][0] - 0 + 1,
-                        box1[0][1] - 0: box1[1][1] - 0 + 1,
-                        box1[0][2] - 16:box1[1][2] - 16 + 1] = data_box1_finest_level
-        """
-                # Interpoler le point voulu en le scalant de corrdonnee a index local au nouvel array (map_coordinates again)
+                box_data_coarse = self[1][0]
+
+                old_indices = box_data_coarse.shape
+                new_indices = np.linspace(-0.25, old_indices[0] + 0.25 - 1, 16)
+                coordinates = np.meshgrid(new_indices, new_indices, new_indices)[0]
+                # Fine data of both levels
+                data_fine = map_coordinates(box_data_coarse, [coordinates.flatten(),
+                                                            coordinates.flatten(),
+                                                            coordinates.flatten(),],
+                                            mode='nearest')
+
+                data_fine.reshape(16, 16, 16)
+                
+                # Loading the relevant boxes and their indices at the finest level - 1 to interpolate
+                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[self.limit_level-1]]
+                
+                # Lowest and highest indices in each dimension from matched boxes
+                indices_lo = np.min(finest_boxes_indices[:, 0, :], axis=0)
+                indices_hi = np.max(finest_boxes_indices[:, 1, :], axis=0) + 1
+                # Expected shape is high indices minus low indices
+                conc_shape = indices_hi - indices_lo
+                conc_array = np.zeros(conc_shape)
+                # Rescales the indices by the smallest value
+                rescaled_box_indices = finest_boxes_indices.copy()
+                # Smallest indices in each dimension so indices start at 0
+                rescaled_box_indices[:, :, 0] -= indices_lo[0]
+                rescaled_box_indices[:, :, 1] -= indices_lo[1]
+                rescaled_box_indices[:, :, 2] -= indices_lo[2]
+                # Populates the concatenated array with the data
+                for box, idx in zip(data_fine, rescaled_box_indices):
+                    conc_array[idx[0, 0]: idx[1, 0] + 1,
+                            idx[0, 1]: idx[1, 1] + 1,
+                            idx[0, 2]: idx[1, 2] + 1] = box
+
+                # Rescales the index point to local indices
+                point_local = point_idx - indices_lo
+                # Interpolates the local point on the constructed array
+                point_data = map_coordinates(conc_array, np.transpose([point_local]))
+                return point_data
         
 
 class PlotfileCooker(object):
@@ -532,7 +575,7 @@ class PlotfileCooker(object):
         ```
         """
         if self.point:
-            return LevelDataSelector(self.fields, self.cells, key, self.limit_level, self.boxes)
+            return LevelDataSelector(self.fields, self.cells, key, self.limit_level, self.boxes, self.dx)
         else:
             return LevelDataSelector(self.fields, self.cells, key, self.limit_level)
 
