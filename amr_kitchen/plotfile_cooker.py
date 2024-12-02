@@ -507,7 +507,8 @@ class PlotfileCooker(object):
                 cfile.readline()
                 cfile.readline()
                 # Are we good
-                assert int(cfile.readline()) == len(self.fields)
+                n_fields_valid = cfile.readline()
+                assert int(n_fields_valid) == len(self.fields)
                 cfile.readline()
                 n_cells = int(cfile.readline().split()[0].replace('(', ''))
                 indexes = []
