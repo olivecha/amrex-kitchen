@@ -72,7 +72,7 @@ def main():
     parser.add_argument(
             "--verbose", "-V", type=int,
             help="Verbosity level, defaults to 1")
-    
+
     args = parser.parse_args()
 
     # Class to handle slice parameters
@@ -80,16 +80,16 @@ def main():
     # This reads the plotfile and cell headers
     # And also stores and define the slice data
     # With default values
-    mand = Mandoline(args.plotfile, 
-                     fields=args.variables, 
+    mand = Mandoline(args.plotfile,
+                     fields=args.variables,
                      limit_level=args.max_level,
                      serial=args.serial,
                      verbose=args.verbose)
 
     # Do one slice
-    mand.slice(normal=args.normal, 
-               pos=args.position, 
-               outfile=args.output, 
+    mand.slice(normal=args.normal,
+               pos=args.position,
+               outfile=args.output,
                fformat=args.format,
                uselog=args.log,
                cmap=args.colormap,

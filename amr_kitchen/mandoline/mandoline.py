@@ -188,7 +188,7 @@ class Mandoline(PlotfileCooker):
         """
         Alternate function to "slice" 2D plotfiles
         This is a conversion to uniform covering grid
-        
+
         output: output path name
 
         fformat: output file format "image", "array", "plotfile"
@@ -499,7 +499,8 @@ class Mandoline(PlotfileCooker):
         # Make a dict with output
         x_grid, y_grid = self.slice_plane_coordinates()
         output = {'x': x_grid,
-                  'y': y_grid,}
+                  'y': y_grid,
+                  'time':self.time}
         # Store in output
         for i, name in enumerate(self.fields_in_slice()):
             output[name] = all_data[i]
