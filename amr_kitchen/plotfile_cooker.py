@@ -4,6 +4,7 @@ import traceback
 import multiprocessing
 import numpy as np
 from tqdm import tqdm
+from scipy.ndimage import map_coordinates
 from amr_kitchen.utils import TastesBadError, shape_from_header
 
 def mp_read_box_single_field(args):
@@ -187,7 +188,7 @@ class LevelDataStream(object):
 
 class LevelDataSelector(object):
 
-    def __init__(self, fields, boxes, field_arg, limit_level):
+    def __init__(self, fields, cells, field_arg, limit_level, boxes = None, dx = None):
         # Convert key to field index
         if isinstance(field_arg, str):
             field_arg = fields[field_arg]
@@ -203,17 +204,143 @@ class LevelDataSelector(object):
             raise IndexError((f"The field indexing [{field_arg}] is not"
                               f" compatible with the number of fields"
                               f" in the plotfile ({len(fields)})"))
-        self.boxes = boxes
+        self.cells = cells
         self.fields = fields
         self.limit_level = limit_level
+        self.boxes = boxes
+        self.dx = dx
 
     def __getitem__(self, key):
         if key > self.limit_level:
             raise ValueError((f"The maximum AMR level of the plotfile"
                               f" is {self.limit_level}"))
-        return LevelDataStream(self.boxes[key]['files'],
-                               self.boxes[key]['offsets'],
+        return LevelDataStream(self.cells[key]['files'],
+                               self.cells[key]['offsets'],
                                self.farg)
+    
+    def __call__(self, *args):
+
+        point = np.array(args)
+
+        # Input validation
+        if len(point) == 0:
+            raise KeyError("Please enter point with valid 2d (x,y) or 3d (x,y,z) format")
+        if self.boxes == None:
+            raise KeyError("PlotfileCooker object was not initiated with a True 'point' argument")
+        if len(point) != self.limit_level+1:
+            raise KeyError(f"Desired point {point} of {len(point)}d size doesn't correlate with the {self.limit_level+1}d size of the plotfile")
+
+        # Finds boxes containing point at each level
+        box_matches = []
+        for level in range(self.limit_level + 1):
+            boxes = np.array(self.boxes[level])
+            # Handles 2D case
+            # All with equals so we catch boundaries
+            # Point in x is lower the all boxes upper lower bound in x
+            box_match = (boxes[:, 0, 0] <= point[0]) & \
+                        (point[0] <= boxes[:, 0, 1]) & \
+                        (boxes[:, 1, 0] <= point[1]) & \
+                        (point[1] <= boxes[:, 1, 1]) & \
+                        (boxes[:, 2, 0] <= point[2]) & \
+                        (point[2] <= boxes[:, 2, 1])
+
+            # Only appends if there are matches
+            if any(box_match):
+                matching_indices = np.where(box_match == True)[0]
+                box_matches.append(matching_indices)
+
+        # Finest matching level
+        match_level = len(box_matches) - 1
+        dx = self.dx[match_level]
+        # Converts point to indices at this level
+        # Scales back by 0.5, because the domain starts at dx/2 (index = 0)
+        point_idx = (point / dx) - 0.5
+
+        # This only works if the point is not between boxes
+        if len(box_matches[-1]) == 1:
+            match_level = len(box_matches) - 1
+            # 3D data for a single box at the finest matching level
+            point_data = self[match_level][int(box_matches[match_level][0])]
+            return point_data
+            
+        else:
+            # Testing if the point is at a boundary shared only by finest level boxes
+            finest_containted = True
+            for level_id in range(len(box_matches) - 1):
+                if len(box_matches[level_id]) != 1:
+                    finest_containted = False
+
+            # If the point is only contained within the finest level:
+            if finest_containted:
+                # Loading the relevant boxes and their indices at the finest level to interpolate
+                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[self.limit_level]]
+                finest_boxes = self[self.limit_level][box_matches[self.limit_level]]
+                # Lowest and highest indices in each dimension from matched boxes
+                indices_lo = np.min(finest_boxes_indices[:, 0, :], axis=0)
+                indices_hi = np.max(finest_boxes_indices[:, 1, :], axis=0) + 1
+                # Expected shape is high indices minus low indices
+                conc_shape = indices_hi - indices_lo
+                conc_array = np.zeros(conc_shape)
+                # Rescales the indices by the smallest value
+                rescaled_box_indices = finest_boxes_indices.copy()
+                # Smallest indices in each dimension so indices start at 0
+                rescaled_box_indices[:, :, 0] -= indices_lo[0]
+                rescaled_box_indices[:, :, 1] -= indices_lo[1]
+                rescaled_box_indices[:, :, 2] -= indices_lo[2]
+                # Populates the concatenated array with the data
+                for box, idx in zip(finest_boxes, rescaled_box_indices):
+                    conc_array[idx[0, 0]: idx[1, 0] + 1,
+                            idx[0, 1]: idx[1, 1] + 1,
+                            idx[0, 2]: idx[1, 2] + 1] = box
+
+                # Rescales the index point to local indices
+                point_local = point_idx - indices_lo
+                # Interpolates the local point on the constructed array
+                point_data = map_coordinates(conc_array, np.transpose([point_local]))
+                return point_data
+        
+            # If the point is at a boundary shared by boxes of different levels:
+            else:
+                box_data_coarse = self[1][0]
+
+                old_indices = box_data_coarse.shape
+                new_indices = np.linspace(-0.25, old_indices[0] + 0.25 - 1, 16)
+                coordinates = np.meshgrid(new_indices, new_indices, new_indices)[0]
+                # Fine data of both levels
+                data_fine = map_coordinates(box_data_coarse, [coordinates.flatten(),
+                                                            coordinates.flatten(),
+                                                            coordinates.flatten(),],
+                                            mode='nearest')
+
+                data_fine.reshape(16, 16, 16)
+                
+                # Loading the relevant boxes and their indices at the finest level - 1 to interpolate
+                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[self.limit_level-1]]
+                
+                # Lowest and highest indices in each dimension from matched boxes
+                indices_lo = np.min(finest_boxes_indices[:, 0, :], axis=0)
+                indices_hi = np.max(finest_boxes_indices[:, 1, :], axis=0) + 1
+                # Expected shape is high indices minus low indices
+                conc_shape = indices_hi - indices_lo
+                conc_array = np.zeros(conc_shape)
+                # Rescales the indices by the smallest value
+                rescaled_box_indices = finest_boxes_indices.copy()
+                # Smallest indices in each dimension so indices start at 0
+                rescaled_box_indices[:, :, 0] -= indices_lo[0]
+                rescaled_box_indices[:, :, 1] -= indices_lo[1]
+                rescaled_box_indices[:, :, 2] -= indices_lo[2]
+                # Populates the concatenated array with the data
+                for box, idx in zip(data_fine, rescaled_box_indices):
+                    conc_array[idx[0, 0]: idx[1, 0] + 1,
+                            idx[0, 1]: idx[1, 1] + 1,
+                            idx[0, 2]: idx[1, 2] + 1] = box
+
+                # Rescales the index point to local indices
+                point_local = point_idx - indices_lo
+                # Interpolates the local point on the constructed array
+                point_data = map_coordinates(conc_array, np.transpose([point_local]))
+                return point_data
+        
 
 class PlotfileCooker(object):
 
@@ -223,7 +350,8 @@ class PlotfileCooker(object):
                  header_only: bool = False,
                  validate_mode: bool = False,
                  maxmins: bool = False,
-                 ghost: bool = False):
+                 ghost: bool = False,
+                 point: bool = False):
         """
         Parse the header data and save as attributes
         ___
@@ -238,6 +366,8 @@ class PlotfileCooker(object):
                  boxes are read (a bit slower)
         ghost: if True the ghost cells around each box are computed by creating
                3D arrays where the value is the index of the box for each level
+        point: if True the plotfile's boxes will be parsed through the overloaded 
+                  __getitem__ method to allow getting data at a specific point 
         """
         self.pfile = plotfile_path
         filepath = os.path.join(self.pfile, 'Header')
@@ -324,6 +454,7 @@ class PlotfileCooker(object):
             else:
                 raise ValueError(("Ghost boxes are not available for plotfiles with"
                                   " ndims < 3"))
+        self.point = point
 
     """
     Methods defining operator overloading
@@ -443,7 +574,10 @@ class PlotfileCooker(object):
             box_data = PlotfileCooker["field"][lv][i]
         ```
         """
-        return LevelDataSelector(self.fields, self.cells, key, self.limit_level)
+        if self.point:
+            return LevelDataSelector(self.fields, self.cells, key, self.limit_level, self.boxes, self.dx)
+        else:
+            return LevelDataSelector(self.fields, self.cells, key, self.limit_level)
 
     """
     Method for constructing the class from plotfile mesh data
@@ -593,9 +727,9 @@ class PlotfileCooker(object):
             grids.append(lvgrids)
         return grids
 
-    def box_points(self, lv: int, bid: int) -> (np.ndarray[float],
+    def box_points(self, lv: int, bid: int) -> tuple[np.ndarray[float],
                                                 np.ndarray[float],
-                                                np.ndarray[float]):
+                                                np.ndarray[float]]:
         """
         Return 3 x (shape) array of the box coordinate points in an AMR box
         lv: Level of the box
