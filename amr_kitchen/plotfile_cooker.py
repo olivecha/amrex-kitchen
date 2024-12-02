@@ -217,7 +217,7 @@ class LevelDataSelector(object):
         return LevelDataStream(self.cells[key]['files'],
                                self.cells[key]['offsets'],
                                self.farg)
-    
+
     def __call__(self, *args):
 
         point = np.array(args)
@@ -225,16 +225,14 @@ class LevelDataSelector(object):
         # Input validation
         if len(point) == 0:
             raise KeyError("Please enter point with valid 2d (x,y) or 3d (x,y,z) format")
-        if self.boxes == None:
-            raise KeyError("PlotfileCooker object was not initiated with a True 'point' argument")
-        if len(point) != self.limit_level+1:
-            raise KeyError(f"Desired point {point} of {len(point)}d size doesn't correlate with the {self.limit_level+1}d size of the plotfile")
+        # if len(point) != self.limit_level+1:
+        #    raise KeyError((f"Desired point {point} of {len(point)}d size"
+        #                    f " doesn't correlate with the {self.limit_level+1}d size of the plotfile")
 
         # Finds boxes containing point at each level
-        box_matches = []
+        box_matches = {}
         for level in range(self.limit_level + 1):
             boxes = np.array(self.boxes[level])
-            # Handles 2D case
             # All with equals so we catch boundaries
             # Point in x is lower the all boxes upper lower bound in x
             box_match = (boxes[:, 0, 0] <= point[0]) & \
@@ -247,22 +245,40 @@ class LevelDataSelector(object):
             # Only appends if there are matches
             if any(box_match):
                 matching_indices = np.where(box_match == True)[0]
-                box_matches.append(matching_indices)
+                box_matches[level] = matching_indices
+            else:
+                box_matches[level] = []
 
         # Finest matching level
-        match_level = len(box_matches) - 1
+        #match_level = len(box_matches) - 1
+        match_level = [ky for ky in box_matches if len(box_matches[ky]) > 0][-1]
         dx = self.dx[match_level]
         # Converts point to indices at this level
         # Scales back by 0.5, because the domain starts at dx/2 (index = 0)
         point_idx = (point / dx) - 0.5
 
         # This only works if the point is not between boxes
-        if len(box_matches[-1]) == 1:
-            match_level = len(box_matches) - 1
+        if len(box_matches[match_level]) == 1:
             # 3D data for a single box at the finest matching level
-            point_data = self[match_level][int(box_matches[match_level][0])]
-            return point_data
-            
+            match_box_id = int(box_matches[match_level][0])
+            data_arrays = self[match_level][match_box_id]
+            box_indices = self.cells[match_level]['indexes'][match_box_id]
+            point_local = point_idx - box_indices[0]
+            point_data = []
+            if isinstance(self.farg, int):
+                point_data_field = map_coordinates(data_arrays,
+                                                   np.transpose([point_local]),
+                                                   mode='nearest')
+                point_data.append(point_data_field[0])
+            else:
+                for fid in range(len(self.farg)):
+                    point_data_field = map_coordinates(data_arrays[..., fid],
+                                                       np.transpose([point_local]),
+                                                       mode='nearest')
+                    point_data.append(point_data_field[0])
+
+            return np.array(point_data)
+
         else:
             # Testing if the point is at a boundary shared only by finest level boxes
             finest_containted = True
@@ -298,14 +314,15 @@ class LevelDataSelector(object):
                 # Interpolates the local point on the constructed array
                 point_data = map_coordinates(conc_array, np.transpose([point_local]))
                 return point_data
-        
+
             # If the point is at a boundary shared by boxes of different levels:
             else:
+                # TODO: Make work for arbitrary plotfiles
                 box_data_coarse = self[1][0]
 
                 old_indices = box_data_coarse.shape
                 new_indices = np.linspace(-0.25, old_indices[0] + 0.25 - 1, 16)
-                coordinates = np.meshgrid(new_indices, new_indices, new_indices)[0]
+                coordinates = np.meshgrid(new_indices, new_indices, new_indices)
                 # Fine data of both levels
                 data_fine = map_coordinates(box_data_coarse, [coordinates.flatten(),
                                                             coordinates.flatten(),
@@ -313,7 +330,7 @@ class LevelDataSelector(object):
                                             mode='nearest')
 
                 data_fine.reshape(16, 16, 16)
-                
+
                 # Loading the relevant boxes and their indices at the finest level - 1 to interpolate
                 finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[self.limit_level-1]]
                 
@@ -350,8 +367,7 @@ class PlotfileCooker(object):
                  header_only: bool = False,
                  validate_mode: bool = False,
                  maxmins: bool = False,
-                 ghost: bool = False,
-                 point: bool = False):
+                 ghost: bool = False):
         """
         Parse the header data and save as attributes
         ___
@@ -366,8 +382,6 @@ class PlotfileCooker(object):
                  boxes are read (a bit slower)
         ghost: if True the ghost cells around each box are computed by creating
                3D arrays where the value is the index of the box for each level
-        point: if True the plotfile's boxes will be parsed through the overloaded 
-                  __getitem__ method to allow getting data at a specific point 
         """
         self.pfile = plotfile_path
         filepath = os.path.join(self.pfile, 'Header')
@@ -454,7 +468,6 @@ class PlotfileCooker(object):
             else:
                 raise ValueError(("Ghost boxes are not available for plotfiles with"
                                   " ndims < 3"))
-        self.point = point
 
     """
     Methods defining operator overloading
@@ -574,10 +587,7 @@ class PlotfileCooker(object):
             box_data = PlotfileCooker["field"][lv][i]
         ```
         """
-        if self.point:
-            return LevelDataSelector(self.fields, self.cells, key, self.limit_level, self.boxes, self.dx)
-        else:
-            return LevelDataSelector(self.fields, self.cells, key, self.limit_level)
+        return LevelDataSelector(self.fields, self.cells, key, self.limit_level, self.boxes, self.dx)
 
     """
     Method for constructing the class from plotfile mesh data
