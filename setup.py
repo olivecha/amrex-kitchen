@@ -24,14 +24,16 @@ setuptools.setup(
     python_requires=">=3.6",
     entry_points={
         "console_scripts": [
-            "mandoline = amr_kitchen.mandoline.cli:main",
-            "colander = amr_kitchen.colander.cli:main",
-            "taste = amr_kitchen.taste.cli:main",
             "chef = amr_kitchen.chef.cli:main",
-            "pestle = amr_kitchen.pestle.cli:main",
-            "marinate = amr_kitchen.marinate:main",
-            "minuterie = amr_kitchen.minuterie:main",
+            "colander = amr_kitchen.colander.cli:main",
+            "combine = amr_kitchen.combine.cli:main",
+            "mandoline = amr_kitchen.mandoline.cli:main",
             "menu = amr_kitchen.menu.cli:main",
+            "pestle = amr_kitchen.pestle.cli:main",
+            "taste = amr_kitchen.taste.cli:main",
+            "whip = amr_kitchen.whip.cli:main",
+            "minuterie = amr_kitchen.minuterie:main",
+            "marinate = amr_kitchen.marinate:main",
         ]
     }
 )

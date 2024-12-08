@@ -1,3 +1,7 @@
 numpy
 matplotlib
 tqdm
+pathos
+cantera
+pytest
+
