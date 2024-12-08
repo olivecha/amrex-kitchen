@@ -4,6 +4,7 @@ import traceback
 import multiprocessing
 import numpy as np
 from tqdm import tqdm
+from scipy.ndimage import map_coordinates
 from amr_kitchen.utils import TastesBadError, shape_from_header
 
 def mp_read_box_single_field(args):
@@ -24,7 +25,7 @@ def mp_read_box_slice_field(args):
         data = np.fromfile(bf, 'float64', np.prod(shape[:-1]) * slice_size)
     data = data.reshape(np.append(shape[:-1], slice_size), order='F')
     return data[..., args[2]]
-        
+
 def mp_read_box_index_field(args):
     diff = args[2][-1] - args[2][0] + 1
     with open(args[0], 'rb') as bf:
@@ -35,8 +36,75 @@ def mp_read_box_index_field(args):
     data = data.reshape(np.append(shape[:-1], diff), order='F')
     return data[..., np.array(args[2]) - args[2][0]]
 
+def mp_read_bfile_single_field(args):
+    file_data = []
+    with open(args[0], 'rb') as bf:
+        while True:
+            try:
+                shape = shape_from_header(bf.readline().decode('ascii'))
+                bf.seek(np.prod(shape[:-1]) * args[1] * 8, 1)
+                data = np.fromfile(bf, 'float64', np.prod(shape[:-1]))
+                bf.seek(np.prod(shape[:-1]) * (shape[-1] - args[1] - 1) * 8, 1)
+                file_data.append(data.reshape(shape[:-1], order='F'))
+            except:
+                break
+    return file_data
+
+def mp_read_bfile_slice_field(args):
+    file_data = []
+    with open(args[0], 'rb') as bf:
+        while True:
+            try:
+                shape = shape_from_header(bf.readline().decode('ascii'))
+                start, stop = args[1].indices(shape[-1])[:2]
+                slice_size = stop - start
+                bf.seek(np.prod(shape[:-1]) * start * 8, 1)
+                data = np.fromfile(bf, 'float64', np.prod(shape[:-1]) * slice_size)
+                bf.seek(np.prod(shape[:-1]) * (shape[-1] - slice_size - start) * 8, 1)
+                data = data.reshape(np.append(shape[:-1], slice_size), order='F')
+                file_data.append(data[..., args[1]])
+            except Exception as e:
+                print(type(e), e)
+                break
+    return file_data
+
+def mp_read_bfile_index_field(args):
+    diff = args[1][-1] - args[1][0] + 1
+    file_data = []
+    with open(args[0], 'rb') as bf:
+        while True:
+            try:
+                shape = shape_from_header(bf.readline().decode('ascii'))
+                bf.seek(np.prod(shape[:-1]) * args[1][0] * 8, 1)
+                data = np.fromfile(bf, 'float64', np.prod(shape[:-1]) * diff)
+                bf.seek(np.prod(shape[:-1]) * (shape[-1] - args[1][-1] - 1) * 8, 1)
+                data = data.reshape(np.append(shape[:-1], diff), order='F')
+                file_data.append(data[..., np.array(args[1]) - args[1][0]])
+            except:
+                break
+    return file_data
+
+class LevelDataIterator(object):
+
+    def __init__(self, fun, bfiles, field_arg):
+        pool = multiprocessing.Pool()
+        self.iterator = pool.imap(fun,
+                                  zip(bfiles,
+                                      [field_arg]*len(bfiles)))
+        self._data = self.iterator.__next__().__iter__()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            return self._data.__next__()
+        except StopIteration:
+            self._data = self.iterator.__next__().__iter__()
+            return self._data.__next__()
+
 class LevelDataStream(object):
-    
+
     def __init__(self, bfiles, offsets, field_arg):
         self.bfiles = np.array(bfiles)
         self.offsets = np.array(offsets)
@@ -44,14 +112,17 @@ class LevelDataStream(object):
         self.farg = field_arg
         if isinstance(self.farg, int):
             self.read_fun = mp_read_box_single_field
+            self.file_fun = mp_read_bfile_single_field
         elif isinstance(self.farg, slice):
             self.read_fun = mp_read_box_slice_field
+            self.file_fun = mp_read_bfile_slice_field
         elif (isinstance(self.farg, list) or
               isinstance(self.farg, np.ndarray)):
             self.farg = np.array(self.farg)
             assert self.farg.ndim == 1, "Field slice indices must be one dimensional"
             self.read_fun = mp_read_box_index_field
-            
+            self.file_fun = mp_read_bfile_index_field
+
     def __getitem__(self, idx):
         if isinstance(idx, int):
             return self.read_fun((self.bfiles[idx],
@@ -66,6 +137,8 @@ class LevelDataStream(object):
                                 [self.farg]*slice_size))
         elif (isinstance(idx, list) or
               isinstance(idx, np.ndarray)):
+            if len(idx) == 0:
+                return []
             idx = np.array(idx)
             assert idx.ndim == 1, "Box slice indices must be one dimensional"
             pool = multiprocessing.Pool()
@@ -77,17 +150,45 @@ class LevelDataStream(object):
                             zip(self.bfiles[idx],
                                 self.offsets[idx],
                                 [self.farg]*count))
-        
     def __iter__(self):
-        pool = multiprocessing.Pool()
-        return pool.imap(self.read_fun,
-                         zip(self.bfiles,
-                             self.offsets,
-                             [self.farg]*len(self.bfiles)))
+        return LevelDataIterator(self.file_fun,
+                                 np.unique(self.bfiles),
+                                 self.farg)
+    def iter(self, idx):
+        """
+        Manual data iterator to support reading data
+        on the fly for slices
+        """
+        if isinstance(idx, int):
+            return self.read_fun((self.bfiles[idx],
+                                  self.offsets[idx],
+                                  self.farg))
+        elif isinstance(idx, slice):
+            slice_size = len(range(*idx.indices(self.size)))
+            pool = multiprocessing.Pool()
+            return pool.imap(self.read_fun,
+                            zip(self.bfiles[idx],
+                                self.offsets[idx],
+                                [self.farg]*slice_size))
+        elif (isinstance(idx, list) or
+              isinstance(idx, np.ndarray)):
+            if len(idx) == 0:
+                return []
+            idx = np.array(idx)
+            assert idx.ndim == 1, "Box slice indices must be one dimensional"
+            pool = multiprocessing.Pool()
+            if idx.dtype == int:
+                count = len(idx)
+            elif idx.dtype == bool:
+                count = np.count_nonzero(idx)
+            return pool.imap(self.read_fun,
+                            zip(self.bfiles[idx],
+                                self.offsets[idx],
+                                [self.farg]*count))
 
 class LevelDataSelector(object):
-    
-    def __init__(self, fields, boxes, field_arg, limit_level):
+
+    def __init__(self, fields, cells, field_arg, limit_level, boxes = None, dx = None):
         # Convert key to field index
         if isinstance(field_arg, str):
             field_arg = fields[field_arg]
@@ -103,28 +204,171 @@ class LevelDataSelector(object):
             raise IndexError((f"The field indexing [{field_arg}] is not"
                               f" compatible with the number of fields"
                               f" in the plotfile ({len(fields)})"))
-        self.boxes = boxes
+        self.cells = cells
         self.fields = fields
         self.limit_level = limit_level
-        
+        self.boxes = boxes
+        self.dx = dx
+
     def __getitem__(self, key):
         if key > self.limit_level:
             raise ValueError((f"The maximum AMR level of the plotfile"
                               f" is {self.limit_level}"))
-        return LevelDataStream(self.boxes[key]['files'],
-                               self.boxes[key]['offsets'],
+        return LevelDataStream(self.cells[key]['files'],
+                               self.cells[key]['offsets'],
                                self.farg)
     def __call__(self, x, y, z):
         pass
 
+    def __call__(self, *args):
+
+        point = np.array(args)
+
+        # Input validation
+        if len(point) == 0:
+            raise KeyError("Please enter point with valid 2d (x,y) or 3d (x,y,z) format")
+        # if len(point) != self.limit_level+1:
+        #    raise KeyError((f"Desired point {point} of {len(point)}d size"
+        #                    f " doesn't correlate with the {self.limit_level+1}d size of the plotfile")
+
+        # Finds boxes containing point at each level
+        box_matches = {}
+        for level in range(self.limit_level + 1):
+            boxes = np.array(self.boxes[level])
+            # All with equals so we catch boundaries
+            # Point in x is lower the all boxes upper lower bound in x
+            box_match = (boxes[:, 0, 0] <= point[0]) & \
+                        (point[0] <= boxes[:, 0, 1]) & \
+                        (boxes[:, 1, 0] <= point[1]) & \
+                        (point[1] <= boxes[:, 1, 1]) & \
+                        (boxes[:, 2, 0] <= point[2]) & \
+                        (point[2] <= boxes[:, 2, 1])
+
+            # Only appends if there are matches
+            if any(box_match):
+                matching_indices = np.where(box_match == True)[0]
+                box_matches[level] = matching_indices
+            else:
+                box_matches[level] = []
+
+        # Finest matching level
+        #match_level = len(box_matches) - 1
+        match_level = [ky for ky in box_matches if len(box_matches[ky]) > 0][-1]
+        dx = self.dx[match_level]
+        # Converts point to indices at this level
+        # Scales back by 0.5, because the domain starts at dx/2 (index = 0)
+        point_idx = (point / dx) - 0.5
+
+        # This only works if the point is not between boxes
+        if len(box_matches[match_level]) == 1:
+            # 3D data for a single box at the finest matching level
+            match_box_id = int(box_matches[match_level][0])
+            data_arrays = self[match_level][match_box_id]
+            box_indices = self.cells[match_level]['indexes'][match_box_id]
+            point_local = point_idx - box_indices[0]
+            point_data = []
+            if isinstance(self.farg, int):
+                point_data_field = map_coordinates(data_arrays,
+                                                   np.transpose([point_local]),
+                                                   mode='nearest')
+                point_data.append(point_data_field[0])
+            else:
+                for fid in range(len(self.farg)):
+                    point_data_field = map_coordinates(data_arrays[..., fid],
+                                                       np.transpose([point_local]),
+                                                       mode='nearest')
+                    point_data.append(point_data_field[0])
+
+            return np.array(point_data)
+
+        else:
+            # Testing if the point is at a boundary shared only by finest level boxes
+            finest_containted = True
+            for level_id in range(len(box_matches) - 1):
+                if len(box_matches[level_id]) != 1:
+                    finest_containted = False
+
+            # If the point is only contained within the finest level:
+            if finest_containted:
+                # Loading the relevant boxes and their indices at the finest level to interpolate
+                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[self.limit_level]]
+                finest_boxes = self[self.limit_level][box_matches[self.limit_level]]
+                # Lowest and highest indices in each dimension from matched boxes
+                indices_lo = np.min(finest_boxes_indices[:, 0, :], axis=0)
+                indices_hi = np.max(finest_boxes_indices[:, 1, :], axis=0) + 1
+                # Expected shape is high indices minus low indices
+                conc_shape = indices_hi - indices_lo
+                conc_array = np.zeros(conc_shape)
+                # Rescales the indices by the smallest value
+                rescaled_box_indices = finest_boxes_indices.copy()
+                # Smallest indices in each dimension so indices start at 0
+                rescaled_box_indices[:, :, 0] -= indices_lo[0]
+                rescaled_box_indices[:, :, 1] -= indices_lo[1]
+                rescaled_box_indices[:, :, 2] -= indices_lo[2]
+                # Populates the concatenated array with the data
+                for box, idx in zip(finest_boxes, rescaled_box_indices):
+                    conc_array[idx[0, 0]: idx[1, 0] + 1,
+                            idx[0, 1]: idx[1, 1] + 1,
+                            idx[0, 2]: idx[1, 2] + 1] = box
+
+                # Rescales the index point to local indices
+                point_local = point_idx - indices_lo
+                # Interpolates the local point on the constructed array
+                point_data = map_coordinates(conc_array, np.transpose([point_local]))
+                return point_data
+
+            # If the point is at a boundary shared by boxes of different levels:
+            else:
+                # TODO: Make work for arbitrary plotfiles
+                box_data_coarse = self[1][0]
+
+                old_indices = box_data_coarse.shape
+                new_indices = np.linspace(-0.25, old_indices[0] + 0.25 - 1, 16)
+                coordinates = np.meshgrid(new_indices, new_indices, new_indices)
+                # Fine data of both levels
+                data_fine = map_coordinates(box_data_coarse, [coordinates.flatten(),
+                                                            coordinates.flatten(),
+                                                            coordinates.flatten(),],
+                                            mode='nearest')
+
+                data_fine.reshape(16, 16, 16)
+
+                # Loading the relevant boxes and their indices at the finest level - 1 to interpolate
+                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[self.limit_level-1]]
+                
+                # Lowest and highest indices in each dimension from matched boxes
+                indices_lo = np.min(finest_boxes_indices[:, 0, :], axis=0)
+                indices_hi = np.max(finest_boxes_indices[:, 1, :], axis=0) + 1
+                # Expected shape is high indices minus low indices
+                conc_shape = indices_hi - indices_lo
+                conc_array = np.zeros(conc_shape)
+                # Rescales the indices by the smallest value
+                rescaled_box_indices = finest_boxes_indices.copy()
+                # Smallest indices in each dimension so indices start at 0
+                rescaled_box_indices[:, :, 0] -= indices_lo[0]
+                rescaled_box_indices[:, :, 1] -= indices_lo[1]
+                rescaled_box_indices[:, :, 2] -= indices_lo[2]
+                # Populates the concatenated array with the data
+                for box, idx in zip(data_fine, rescaled_box_indices):
+                    conc_array[idx[0, 0]: idx[1, 0] + 1,
+                            idx[0, 1]: idx[1, 1] + 1,
+                            idx[0, 2]: idx[1, 2] + 1] = box
+
+                # Rescales the index point to local indices
+                point_local = point_idx - indices_lo
+                # Interpolates the local point on the constructed array
+                point_data = map_coordinates(conc_array, np.transpose([point_local]))
+                return point_data
+        
+
 class PlotfileCooker(object):
 
-    def __init__(self, 
-                 plotfile_path: str, 
-                 limit_level: int = None, 
+    def __init__(self,
+                 plotfile_path: str,
+                 limit_level: int = None,
                  header_only: bool = False,
-                 validate_mode: bool = False,  
-                 maxmins: bool = False, 
+                 validate_mode: bool = False,
+                 maxmins: bool = False,
                  ghost: bool = False):
         """
         Parse the header data and save as attributes
@@ -196,6 +440,10 @@ class PlotfileCooker(object):
                                           f" {catched_tback}"))
                 else:
                     raise e
+
+        # Compute the global 1D grids
+        self.grids = self.compute_global_grids()
+
         # Read the cell data
         if not header_only:
             try:
@@ -273,7 +521,7 @@ class PlotfileCooker(object):
 
         ```
         # Temperature data at level 0:
-        PlotfileCooker["temp"][0]  
+        PlotfileCooker["temp"][0]
         ```
 
         ```
@@ -289,11 +537,11 @@ class PlotfileCooker(object):
             pass
         ```
 
-        The third layer defines from which AMR box the data is selected. 
+        The third layer defines from which AMR box the data is selected.
         integer, slice and array like indices are supported. If the index
         argument is not an integer, multiprocessing is used to read the data.
         Because the shape of the data is not consistent between boxes, a list
-        of arrays is returned for non integer slices. 
+        of arrays is returned for non integer slices.
         The box data shape has the format `(shape_x, shape_y, shape_z, fields)`.
 
         ```
@@ -341,7 +589,7 @@ class PlotfileCooker(object):
             box_data = PlotfileCooker["field"][lv][i]
         ```
         """
-        return LevelDataSelector(self.fields, self.cells, key, self.limit_level)
+        return LevelDataSelector(self.fields, self.cells, key, self.limit_level, self.boxes, self.dx)
 
     """
     Method for constructing the class from plotfile mesh data
@@ -405,7 +653,8 @@ class PlotfileCooker(object):
                 cfile.readline()
                 cfile.readline()
                 # Are we good
-                assert int(cfile.readline()) == len(self.fields)
+                n_fields_valid = cfile.readline()
+                assert int(n_fields_valid) == len(self.fields)
                 cfile.readline()
                 n_cells = int(cfile.readline().split()[0].replace('(', ''))
                 indexes = []
@@ -472,6 +721,42 @@ class PlotfileCooker(object):
         shapes = np.unique(shapes, axis=0)
         shapes = [tuple(shape) for shape in shapes]
         return shapes
+
+    def compute_global_grids(self) -> list[np.ndarray[float]]:
+        """
+        Compute the plotfile grids for each level and dimension
+        grids are defined such as grid[box_indices] = box_coordinate
+        """
+        grids = []
+        for lv in range(self.limit_level + 1): 
+            lvgrids = []
+            for coord in range(self.ndims):
+                lv_dx = self.dx[lv][coord]/2
+                grid = np.linspace(self.geo_low[coord] + lv_dx,
+                                   self.geo_high[coord] - lv_dx,
+                                   self.grid_sizes[lv][coord])
+                lvgrids.append(grid)
+            grids.append(lvgrids)
+        return grids
+
+    def box_points(self, lv: int, bid: int) -> tuple[np.ndarray[float],
+                                                np.ndarray[float],
+                                                np.ndarray[float]]:
+        """
+        Return 3 x (shape) array of the box coordinate points in an AMR box
+        lv: Level of the box
+        bid: index of the box
+        """
+        indices = self.cells[lv]['indexes'][bid]
+        shape = indices[1] - indices[0] + 1
+        x_loc = self.grids[lv][0][indices[0][0]:indices[1][0]+1]
+        y_loc = self.grids[lv][1][indices[0][1]:indices[1][1]+1]
+        z_loc = self.grids[lv][2][indices[0][2]:indices[1][2]+1]
+
+        x_box = np.repeat([np.repeat([x_loc], shape[1], axis=0)], shape[2], axis=0).T
+        y_box = np.repeat([np.repeat([y_loc], shape[2], axis=0).T], shape[0], axis=0)
+        z_box = np.repeat([np.repeat([z_loc], shape[1], axis=0)], shape[0], axis=0)
+        return x_box, y_box, z_box
 
     """
     Iterators to loop over plotfile data manually
@@ -540,7 +825,7 @@ class PlotfileCooker(object):
                       "lv":lv,
                       "off2":off2}
             yield output
-            
+
     def map_bfile_offsets(self, lv: int) -> list[np.ndarray[int]]:
         """
         Compute the index map of the AMR box offsets
@@ -676,7 +961,6 @@ class PlotfileCooker(object):
                 box_array[bidx_lo[0]:bidx_hi[0] + 1,
                           bidx_lo[1]:bidx_hi[1] + 1,
                           bidx_lo[2]:bidx_hi[2] + 1] = i
-                
                 lv_barray_indices.append([bidx_lo, bidx_hi])
             box_arrays.append(box_array)
             box_array_indices.append(lv_barray_indices)
