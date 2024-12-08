@@ -87,6 +87,8 @@ The **chef** has entered the Amrex kitchen: with this tool you can apply **recip
 
 <img width="300" alt="image" src="https://github.com/user-attachments/assets/d0f20c96-a34a-4118-80d8-a75dacd468a5">
 
+### Usage:
+
 There are predefined recipes like Enthalpy and HeatRelease:
 ```
 chef --outdir plthrr --recipe HRR --mech mechanism.yaml --pressure 1 plt00000
@@ -149,13 +151,58 @@ $ chef --output pltTdiff --recipe my_recipe2.py plt00000
 
 <img width="300" alt="colander" src="https://github.com/olivecha/amrex-kitchen/assets/78630053/aec452e7-520e-4f2c-bbb2-44c79dd0c6ca">
 
-Strain out variables or levels from plotfiles, see:
+Strain out variables or levels from plotfiles:
+
+### Usage:
 
 ```
-$ colander --help
+usage: colander [-h] [--variables VARIABLES [VARIABLES ...]] [--limit_level LIMIT_LEVEL] [--serial] [--output OUTPUT] plotfile
+
+Filter out field and remove levels from AMReX plotfiles
+
+positional arguments:
+  plotfile              Path of the plotfile to filter
+
+options:
+  -h, --help            show this help message and exit
+  --variables, -v VARIABLES [VARIABLES ...]   Variable to keep in the filtered plotfile
+                        
+  --limit_level, -l LIMIT_LEVEL   Maximum AMR Level to keep in the filtered plotfile
+  --serial, -s          Flag to disable multiprocessing
+  --output, -o OUTPUT   Output path to store the filtered plotfile
 ```
 
-## mandoline
+The output field is mandatory, keeping only the first adaptive mesh refinement level would yield the command:
+```
+colander --output plt_level0 --variables all --limit_level 0 plt50000
+```
+
+Creating a plotfile of the temperature field with the finest mesh refinement level:
+```
+colander --variables temp --output plt_temp_fine  plt50000
+```
+
+## Combine
+
+Combine fields from two plotfiles into a new one. This can be usefull to add back a field produced by `Chef` into the original plotfile.
+
+### Usage:
+```
+usage: combine [-h] [--plotfile1 PLOTFILE1] [--plotfile2 PLOTFILE2] [--vars1 VARS1] [--vars2 VARS2] [--output OUTPUT] [--serial]
+
+Combine two AMReX plotfiles
+
+options:
+  -h, --help            show this help message and exit
+  --plotfile1, -p1 PLOTFILE1   Path of the first plotfile to combine
+  --plotfile2, -p2 PLOTFILE2   Path of the second plotfile to combine
+  --vars1, -v1 VARS1    Comma or space separated variables between quotes to keep in the first plotfile
+  --vars2, -v2 VARS2    Comma or space separated variables between quotes to keep in the second plotfile
+  --output, -o OUTPUT   Output path to store the combined plotfile
+  --serial, -s          Flag to disable multiprocessing
+```
+
+## Mandoline
 
 <img width="350" alt="image" src="https://github.com/olivecha/mandoline/assets/78630053/857636f4-e49d-41d2-b428-6e12b6874157">
 
@@ -212,7 +259,7 @@ options:
   --maximum, -M MAXIMUM.    Maximum value used in the colormap
   --log, -l                 Flag to use log scale in the plotted image
 ```
-### How it works
+### More information
 
 AMReX blocks intersecting the slicing plane are read from the plotfile. Arrays
 with the closests points at either side of the plane are constructed for each
@@ -224,10 +271,106 @@ data to increase speed and reduce output size is planned.
 **Known issue:** when the slice position is between the last point of a higher
 level box and the fist point of a lower level box it is possible that the region
 will only be covered with lower level data. Moving the slice by the grid
-resolution of the highest level is a temporary fix. 
+resolution of the highest level is a temporary fix.
 
+## Menu
 
+Display information about what fields are in a plotfile and their units, descriptions and min/max values. Units are taken from the PeleLMeX code.
 
+```
+usage: menu [-h] [--has_var HAS_VAR] [--every] [--description] [--min_max] [--finest_lv] plotfile
 
+Displays fields and species of a plotfile
 
+positional arguments:
+  plotfile              Path of the plotfile to read
+
+options:
+  -h, --help            show this help message and exit
+  --every, -e           Flag to enable displaying every field in the database and if they are the plotfile or not
+  --description, -d     Flag to enable displaying the fields' descriptions
+  --min_max, -m         Flag to enable displaying the fields' absolute min and max throughout every level
+  --finest_lv, -f       Flag to enable displaying the fields' min and max only at the finest level
+```
+
+## Pestle
+
+Volume integrals of multilevel plotfile. This tool was profiled againts the `fvolumesum.cpp` script in AMReX tools and performed better with the same number of cores. Additionnaly, the `volFrac` field defined for embedded boundaries in PeleLmeX can be taken into acount to produce more accurate integrals.
+
+```
+usage: pestle [-h] [--variable VARIABLE] [--limit_level LIMIT_LEVEL] [--volfrac] plotfile
+
+Prints the volume integral of the chosen field in a plotfile
+
+positional arguments:
+  plotfile              Path of the plotfile to integrate
+
+options:
+  -h, --help            show this help message and exit
+  --variable, -v VARIABLE Variable to integrate
+  --limit_level, -l LIMIT_LEVEL Maximum AMR Level considered
+  --volfrac, -vf        Use the volFrac field to obtain more accurate integrals for plotfiles with embedded boundaries. The
+                        contribution of a finite volume to the integral is taken as: value * dV * volFrac.
+```
+
+## Taste
+
+Validate the sanity of AMReX plotfiles. This tool was created to help validate the other tools as they were developped. Also, the tool first check if the file hierarchy of the plotfile is complete, which is usefull to check if a plotfile was purged by computing clusters temporary disk space policies.
+
+```
+usage: taste [-h] [--limit_level LIMIT_LEVEL] [--no_bin_headers] [--no_bin_shape] [--bin_data] [--box_coords] [--nofail]
+             [--verbose VERBOSE]
+             plotfile
+
+positional arguments:
+  plotfile              Path of the plotfile to validate
+
+options:
+  -h, --help            show this help message and exit
+  --limit_level, -l LIMIT_LEVEL
+                        Limit level at which the validation will occur
+  --no_bin_headers, -nh
+                        Do not validate the indexes in the binary headers
+  --no_bin_shape, -ns   Do not validate the shape of the binary data
+  --bin_data, -bd       Validate the binary data against the max/mins in the level headers and warn if NaNs are encountered (This
+                        can take a while)
+  --box_coords, -bc     Validate that the boxes coordinates in the plotfile header are consistent with the indices in the level
+                        headers
+  --nofail, -nf         Don't fail on the first error and perform all the checks
+  --verbose, -v VERBOSE
+                        Verbosity level (Defaults to 1)
+```
+
+## Whip
+
+Create a uniform 3D array of a plotfile field and save it to the compressed numpy format. Lower level data is broadcasted to the finest AMR Level. A prompt requires the user to validate if the expected size of the uniform grid can fit into memory. 
+
+```
+usage: whip [-h] [--variable VARIABLE] [--limit_level LIMIT_LEVEL] [--outfile OUTFILE] [--dtype DTYPE] [--nochecks] plotfile
+
+positional arguments:
+  plotfile              Path of the plotfile used to make the uniform grid
+
+options:
+  -h, --help                      show this help message and exit
+  --variable, -v VARIABLE         Variable used to create the uniform grid
+  --limit_level, -l LIMIT_LEVEL   Maximum AMR Level considered
+  --outfile, -o OUTFILE           Output file to override the default
+  --dtype, -d DTYPE               Data type used (defaults to float64), but float32 or integer types can be used to save space (this is
+                                  slower as the data has to be recasted by numpy)
+  --nochecks, -y                  Do not prompt if the required memory is acceptable
+```
+
+## Minuterie 
+
+This tool simply displays the time of a plotfile. This is useful to create timeseries plot on the fly without reading the whole plotfile by piping the output from multiple plotfiles into a text file. A minimal amount of data is read from the header to obtain the plotfile time.
+
+```
+$ minuterie test_assets/example_plt_2d
+Plotfile time = 0.4994722514455662
+```
+
+## Marinate
+
+Saves the PlotfileCooker object of a plotfile to a pickle file. This allows working with the `PlotfileCooker` object of very large plotfiles (> 1 Tb) on a desktop computer, as the object should take less than 1 Gb. The pickle file has the name of the plotfile directory with the extension `.pkl`.
 
