@@ -85,7 +85,7 @@ arbitrarly large plotfiles, and scale linearly with plotfile size (with some exc
 
 The **chef** has entered the Amrex kitchen: with this tool you can apply **recipes** to plotfiles.
 
-![image](https://github.com/user-attachments/assets/d0f20c96-a34a-4118-80d8-a75dacd468a5)
+<img width="300" alt="image" src="https://github.com/user-attachments/assets/d0f20c96-a34a-4118-80d8-a75dacd468a5">
 
 There are predefined recipes like Enthalpy and HeatRelease:
 ```
