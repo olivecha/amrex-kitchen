@@ -147,6 +147,31 @@ Which is computed using a similar command (without needing mechanism or pressure
 $ chef --output pltTdiff --recipe my_recipe2.py plt00000
 ```
 
+All available options and flags are as follows:
+```
+usage: chef [-h] [--outdir OUTDIR] [--recipe RECIPE] [--species SPECIES [SPECIES ...]] [--reactions REACTIONS [REACTIONS ...]]
+            [--mech MECH] [--pressure PRESSURE]
+            plotfile
+
+positional arguments:
+  plotfile              Path of the plotfile to cook
+
+options:
+  -h, --help            show this help message and exit
+  --outdput, -o OUTDIR   Output path of the generated plotfile (defaults to input_plotfile'_ck'
+  --recipe, -r RECIPE   Recipe used to add new data, available recipes are: - 'HRR': Heat release rate [W/m^3] - 'ENT': Sensible
+                        enthalpy [] - 'SRi': Reaction rate of selected species (must specify with --species argument) - 'SDi':
+                        Diffusion coefficient of selected species (must specify with --species argument) - 'RRi' : Rate of
+                        progress of selected reactions (must specify with the --reactions argument) - user defined: the path to a
+                        python file with a function named 'recipe' in it
+  --species, -s SPECIES [SPECIES ...]
+                        name of the species for which the recipe is prepared
+  --reactions, -R REACTIONS [REACTIONS ...]
+                        index of the reactions for which the recipe is applied
+  --mech, -m MECH       Path to the Cantera mechanism to use for the derived variables computations
+  --pressure, -p PRESSURE  Pressure of the simulation data (atm)
+```
+
 ## Colander
 
 <img width="300" alt="colander" src="https://github.com/olivecha/amrex-kitchen/assets/78630053/aec452e7-520e-4f2c-bbb2-44c79dd0c6ca">
