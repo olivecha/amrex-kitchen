@@ -1,7 +1,9 @@
 numpy
+scipy
 matplotlib
 tqdm
 pathos
 cantera
 pytest
+humanize
 
