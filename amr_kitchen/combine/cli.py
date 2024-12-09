@@ -1,6 +1,6 @@
 import sys
 import argparse
-from combine import combine
+from .combine import combine
 from amr_kitchen import PlotfileCooker
 
 def main():
@@ -15,11 +15,11 @@ def main():
             "--plotfile2", "-p2", type=str,
             help="Path of the second plotfile to combine")
     parser.add_argument(
-            "--vars1", "-v1", type=list_of_strings,
+            "--vars1", "-v1", type=str,
             help=("Comma or space separated variables between quotes"
                   " to keep in the first plotfile"))
     parser.add_argument(
-            "--vars2", "-v2", type=list_of_strings,
+            "--vars2", "-v2", type=str,
             help=("Comma or space separated variables between quotes"
                   " to keep in the second plotfile"))
     parser.add_argument(
@@ -32,9 +32,11 @@ def main():
     args = parser.parse_args()
     plt1, plt2, pltout = sys.argv[1:]
 
-    combine(PlotfileCooker(plt1), 
-            PlotfileCooker(plt2), 
-            pltout)
+    combine(PlotfileCooker(args.plotfile1), 
+            PlotfileCooker(args.plotfile2), 
+            pltout=args.output,
+            vars1=args.vars1,
+            vars2=args.vars2)
 
 if __name__ == "__main__":
     main()
