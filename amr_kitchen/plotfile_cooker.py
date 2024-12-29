@@ -227,9 +227,6 @@ class LevelDataSelector(object):
         # Input validation
         if len(point) == 0:
             raise KeyError("Please enter point with valid 2d (x,y) or 3d (x,y,z) format")
-        # if len(point) != self.limit_level+1:
-        #    raise KeyError((f"Desired point {point} of {len(point)}d size"
-        #                    f " doesn't correlate with the {self.limit_level+1}d size of the plotfile")
 
         # Finds boxes containing point at each level
         box_matches = {}
@@ -237,6 +234,7 @@ class LevelDataSelector(object):
             boxes = np.array(self.boxes[level])
             # All with equals so we catch boundaries
             # Point in x is lower the all boxes upper lower bound in x
+            # TODO: First match for within box_lo + dx/2 <= point <= box_hi - dx/2
             box_match = (boxes[:, 0, 0] <= point[0]) & \
                         (point[0] <= boxes[:, 0, 1]) & \
                         (boxes[:, 1, 0] <= point[1]) & \
@@ -282,16 +280,26 @@ class LevelDataSelector(object):
             return np.array(point_data)
 
         else:
-            # Testing if the point is at a boundary shared only by finest level boxes
-            finest_containted = True
-            for level_id in range(len(box_matches) - 1):
-                if len(box_matches[level_id]) != 1:
-                    finest_containted = False
+            # TODO: Test for box_lo - dx/2 <= point <= box_hi + dx/2
+            # TODO: Replace with the right test: is the point contained by the scatter of the 
+            # points at the finest level (could try a algorithm for arbitrary scatters with only the
+            # points at the corner of the boxes).
+            # Should return list like: [True, True, True, False]
+            # contained_level = 2
+            #| # Testing if the point is at a boundary shared only by finest level boxes
+            #| finest_containted = True
+            #| for level_id in range(len(box_matches) - 1):
+            #|     if len(box_matches[level_id]) != 1:
+            #|         finest_containted = False
+
+            
+            # if len(box_matches[-1]) = 1: -> Point is
+            
 
             # If the point is only contained within the finest level:
             if finest_containted:
                 # Loading the relevant boxes and their indices at the finest level to interpolate
-                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[self.limit_level]]
+                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[match_level]]
                 finest_boxes = self[self.limit_level][box_matches[self.limit_level]]
                 # Lowest and highest indices in each dimension from matched boxes
                 indices_lo = np.min(finest_boxes_indices[:, 0, :], axis=0)
@@ -308,8 +316,8 @@ class LevelDataSelector(object):
                 # Populates the concatenated array with the data
                 for box, idx in zip(finest_boxes, rescaled_box_indices):
                     conc_array[idx[0, 0]: idx[1, 0] + 1,
-                            idx[0, 1]: idx[1, 1] + 1,
-                            idx[0, 2]: idx[1, 2] + 1] = box
+                               idx[0, 1]: idx[1, 1] + 1,
+                               idx[0, 2]: idx[1, 2] + 1] = box
 
                 # Rescales the index point to local indices
                 point_local = point_idx - indices_lo
@@ -319,19 +327,21 @@ class LevelDataSelector(object):
 
             # If the point is at a boundary shared by boxes of different levels:
             else:
-                # TODO: Make work for arbitrary plotfiles
-                box_data_coarse = self[1][0]
 
+                # 1. Refaire conc array avec le contained_level mais rafine a match level
+                # 2. Ajouter les donnes de match_level (et possiblement des niveau entre les deux)
+
+                # How to refine coarse data to one level higher using map_coordinates
+                box_data_coarse = self[1][0]
                 old_indices = box_data_coarse.shape
-                new_indices = np.linspace(-0.25, old_indices[0] + 0.25 - 1, 16)
-                coordinates = np.meshgrid(new_indices, new_indices, new_indices)
+                new_indices_x = np.linspace(-0.25, old_indices[0] + 0.25 - 1, box_data_coarse.shape[0] * 2)
+                coordinates = np.meshgrid(new_indices_x, new_indices_y, new_indices_y)
                 # Fine data of both levels
                 data_fine = map_coordinates(box_data_coarse, [coordinates.flatten(),
                                                             coordinates.flatten(),
                                                             coordinates.flatten(),],
                                             mode='nearest')
-
-                data_fine.reshape(16, 16, 16)
+                data_fine.reshape(16, 16, 16) # Replace (16, 16, 16) with box_data_coarse.shape * 2
 
                 # Loading the relevant boxes and their indices at the finest level - 1 to interpolate
                 finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[self.limit_level-1]]
