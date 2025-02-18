@@ -35,7 +35,7 @@ class Mandoline(PlotfileCooker):
                      the center of the domain
 
         limit_level: Maximum data level used to create the slice, defaults
-                     to the maximum level in the file 
+                     to the maximum level in the file
 
         serial:      Wheter or not to run the slicing function in parallel
 
@@ -500,7 +500,10 @@ class Mandoline(PlotfileCooker):
         x_grid, y_grid = self.slice_plane_coordinates()
         output = {'x': x_grid,
                   'y': y_grid,
-                  'time':self.time}
+                  'time':self.time,
+                  'dx':x_grid[2] - x_grid[1],
+                  'slice_normal':self.coordnames[self.cn],
+                  'slice_pos':self.pos}
         # Store in output
         for i, name in enumerate(self.fields_in_slice()):
             output[name] = all_data[i]
