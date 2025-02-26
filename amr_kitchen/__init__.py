@@ -5,3 +5,4 @@ from . import chef
 from . import taste
 from . import combine
 from . import pestle
+from . import chk2plt

@@ -25,6 +25,7 @@ setuptools.setup(
     entry_points={
         "console_scripts": [
             "chef = amr_kitchen.chef.cli:main",
+            "chk2plt = amr_kitchen.chk2plt.cli:main",
             "colander = amr_kitchen.colander.cli:main",
             "combine = amr_kitchen.combine.cli:main",
             "mandoline = amr_kitchen.mandoline.cli:main",
