@@ -403,7 +403,19 @@ class PlotfileCooker(object):
             self.nvars = int(hfile.readline())
             self.fields = {}
             for i in range(self.nvars):
-                self.fields[hfile.readline().replace('\n', '')] = i
+                field_name = hfile.readline().replace('\n', '')
+                if field_name not in self.fields:
+                    self.fields[field_name] = i
+                else:
+                    repeat_number = 2
+                    while True:
+                        field_name_extra =  f"{field_name}_{repeat_number}" 
+                        if field_name_extra not in self.fields:
+                            self.fields[field_name_extra] = i
+                            break
+                        else:
+                            repeat_number += 1
+
             # General data
             self.ndims = int(hfile.readline())
             self.time = float(hfile.readline())
