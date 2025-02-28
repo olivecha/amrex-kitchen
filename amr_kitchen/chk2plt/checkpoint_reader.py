@@ -89,9 +89,10 @@ class CheckpointReader(object):
                 field_counter += 1
             self.nfields = {'typval': field_counter}
         # Compute grid sizes
+
         self.grid_sizes = [np.max(self.boxes[0]['indices'][:, 1, :], axis=0) + 1]
         for lv in range(1, self.max_level + 1):
-            self.grid_sizes.append(self.grid_sizes[0] * lv * 2)
+            self.grid_sizes.append(self.grid_sizes[-1] * 2)
         self.nboxes = np.array([self.boxes[lv]['indices'].shape[0] for lv in range(self.max_level + 1)])
         # Compute grid resolution
         self.domain = self.geo_hi - self.geo_lo
