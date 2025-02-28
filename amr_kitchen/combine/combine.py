@@ -92,7 +92,7 @@ def parallel_combine_by_binfile_offsets(args):
                     bfw.write(dataw.tobytes())
     return offsets
 
-def parallel_combine_by_binfile_offsets(args):
+def parallel_combine_by_boxes_offsets(args):
     """
     Read two binary file and write the contents
     to a third one
