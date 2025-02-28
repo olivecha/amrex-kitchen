@@ -56,11 +56,11 @@ def check_intersect(box: np.ndarray[float],
         return False
 
 def main():
-# INPUTS
+    # INPUTS
     plotfile = sys.argv[1]
     field = sys.argv[2]
     pck = PlotfileCooker(plotfile, ghost=True)
-    plane_point = [0.00, 0.0015 + 3 * 7.8125e-05, 0.00]
+    plane_point = [0.00, 0.0015 + 1 * 7.8125e-05, 0.00]
     plane_normal = [0, -1, 0.577]
     global FIELD_ID
     FIELD_ID = pck.fields[field]
@@ -132,7 +132,7 @@ def main():
     # Read the data at the plane points
     all_points = []
     all_data = []
-    all_faces = []
+    #all_faces = []
     all_levels = []
     point_count = 0
     # Up until the finest level
@@ -143,7 +143,7 @@ def main():
             continue
         print(f"Level {lv}")
         for bid, data, msk in tqdm(zip(filtered_indices[lv],
-                                       pck[FIELD_ID][lv].iter(filtered_indices[lv]),
+                                       pck[[field, 'volFrac']][lv].iter(filtered_indices[lv]),
                                        covering_masks[lv]),
                              total=len(filtered_indices[lv])):
             # Evaluate the box points in 3D
@@ -153,11 +153,15 @@ def main():
             # Find the plane surface indices
             points, faces, normals, values = skimage.measure.marching_cubes(P, level=0)
             # Interpolate the mask on the surface
-            mask_data = scipy.ndimage.map_coordinates(msk, points.T, order=1, cval=1, mode='constant')
+            mask_data = scipy.ndimage.map_coordinates(msk, points.T, order=3, mode='nearest')
             # Interpolate the data on the surface
-            plane_data = scipy.ndimage.map_coordinates(data, points.T, order=1, cval=1, mode='constant')
+            field_data = data[..., 0]
+            vfrac = data[..., 1]
+            if field == 'temp':
+                field_data[vfrac == 0.] = 330.
+            plane_data = scipy.ndimage.map_coordinates(field_data, points.T, order=3, mode='nearest')
             # Remove masked points from the surface
-            removed_points = np.arange(points.shape[0])[mask_data]
+            #removed_points = np.arange(points.shape[0])[mask_data]
             #faces_mask = np.any(np.isin(faces, removed_points), axis=1)
             #faces = faces[faces_mask, :]
             # Convert box indices to global coordinates
@@ -166,30 +170,36 @@ def main():
             points[:, 0] /= (pck.grid_sizes[lv][0] - 1)
             points[:, 1] /= (pck.grid_sizes[lv][1] - 1)
             points[:, 2] /= (pck.grid_sizes[lv][2] - 1)
-            points[:, 0] *= (pck.geo_high[0] - pck.dx[lv][0]/2 - pck.geo_low[0] + pck.dx[lv][0]/2) 
+            points[:, 0] *= (pck.geo_high[0] - pck.dx[lv][0]/2 - pck.geo_low[0] + pck.dx[lv][0]/2)
             points[:, 0] += pck.geo_low[0] + pck.dx[lv][0]/2
-            points[:, 1] *= (pck.geo_high[1] - pck.dx[lv][1]/2 - pck.geo_low[1] + pck.dx[lv][1]/2) 
+            points[:, 1] *= (pck.geo_high[1] - pck.dx[lv][1]/2 - pck.geo_low[1] + pck.dx[lv][1]/2)
             points[:, 1] += pck.geo_low[1] + pck.dx[lv][1]/2
-            points[:, 2] *= (pck.geo_high[2] - pck.dx[lv][2]/2 - pck.geo_low[2] + pck.dx[lv][2]/2) 
+            points[:, 2] *= (pck.geo_high[2] - pck.dx[lv][2]/2 - pck.geo_low[2] + pck.dx[lv][2]/2)
             points[:, 2] += pck.geo_low[2] + pck.dx[lv][2]/2
+            points = points[~mask_data]
             all_points.append(np.transpose(points))
-            all_faces.append(np.transpose(faces + point_count))
-            point_count += points.shape[0]
+            #all_faces.append(np.transpose(faces + point_count))
+            #point_count += points.shape[0]
             all_levels.append(np.ones(points.shape[0]) * lv)
-            all_data.append(plane_data)
+            all_data.append(plane_data[~mask_data])
 
     lv = 4
     print(f"Level {lv}")
     pool = multiprocessing.Pool()
     for bid, data in tqdm(zip(filtered_indices[lv],
-                              pck[field][lv].iter(filtered_indices[lv])),
+                              pck[[field, 'volFrac']][lv].iter(filtered_indices[lv])),
                           total=len(filtered_indices[lv])):
         x, y, z = pck.box_points(lv, bid)
         P = plane_fun(np.array([x, y, z]).T).T
         if not (np.max(P) > 0 and np.min(P) < 0):
             continue
         points, faces, normals, values = skimage.measure.marching_cubes(P, level=0)
-        plane_data = scipy.ndimage.map_coordinates(data, points.T, order=1, mode='nearest')
+        field_data = data[..., 0]
+        vfrac = data[..., 1]
+        # Isothermal boundary condition
+        if field == 'temp':
+            field_data[vfrac == 0.] = 330.
+        plane_data = scipy.ndimage.map_coordinates(field_data, points.T, order=3, mode='nearest')
         all_data.append(plane_data)
         indices = pck.cells[lv]['indexes'][bid]
         points += indices[0]
@@ -203,7 +213,7 @@ def main():
         points[:, 2] *= (pck.geo_high[2] - pck.dx[lv][2]/2 - pck.geo_low[2] + pck.dx[lv][2]/2) 
         points[:, 2] += pck.geo_low[2] + pck.dx[lv][2]/2
         all_points.append(np.transpose(points))
-        all_faces.append(np.transpose(faces + point_count))
+        #all_faces.append(np.transpose(faces + point_count))
         point_count += points.shape[0]
         all_levels.append(np.ones(points.shape[0]) * lv)
 
@@ -231,11 +241,11 @@ def main():
                         np.abs(points_e2).max() + 1e-16,
                         pck.dx[lv][0])
     print("Interpolating on uniform grid")
-    itrp = NearestNDInterpolator(np.transpose([points_e1,
-                                               np.abs(points_e2)]),
-                                 np.hstack(all_data))
-
-    d_plane = itrp(*np.meshgrid(x_plane, y_plane))
+    d_plane = griddata(np.transpose([points_e1,
+                                     np.abs(points_e2)]),
+                       np.hstack(all_data),
+                       np.transpose(np.meshgrid(x_plane, y_plane)),
+                       method='cubic')
     # Save key for the plane rotation axis
     coords = np.array(['x', 'y', 'z'])
     rot_key = coords[np.flatnonzero(e1)][0]
@@ -247,12 +257,6 @@ def main():
               field:d_plane}
     print("Saving 2D array")
     np.savez(f"{plotfile}_{field}_{rot_key}", **output)
-
-    #cells = {"triangle":np.hstack(all_faces).T}
-    #mesh = meshio.Mesh(all_points, cells,
-    #                   point_data={"level":np.hstack(all_levels),
-    #                               field:np.hstack(all_data)})
-    #mesh.write(f"{plotfile}_{field}_bias.vtk")
 
 if __name__ == "__main__":
     main()
