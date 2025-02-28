@@ -92,7 +92,7 @@ def parallel_combine_by_binfile_offsets(args):
                     bfw.write(dataw.tobytes())
     return offsets
 
-def parallel_combine_by_binfile_offsets(args):
+def parallel_combine_by_boxes_offsets(args):
     """
     Read two binary file and write the contents
     to a third one
@@ -365,7 +365,7 @@ def combine(pck1, pck2, pltout=None,
                                                                   vidxs2=vidxs2))
         # Boxes are in different files (first plotfile structure is kept)
         elif cbmode == "bybox":
-            new_offsets = pool.map(parallel_combine_by_binfile_offsets,
+            new_offsets = pool.map(parallel_combine_by_boxes_offsets,
                                    pck.by_matched_boxes_output(pck2, lv, pltout,
                                                                vidxs1=vidxs1,
                                                                vidxs2=vidxs2))
