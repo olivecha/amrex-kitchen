@@ -30,7 +30,7 @@ def main():
             help="Flag to disable multiprocessing")
     
     args = parser.parse_args()
-    plt1, plt2, pltout = sys.argv[1:]
+    #plt1, plt2, pltout = sys.argv[1:]
 
     combine(PlotfileCooker(args.plotfile1), 
             PlotfileCooker(args.plotfile2), 

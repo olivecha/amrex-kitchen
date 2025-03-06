@@ -102,8 +102,8 @@ def parallel_combine_by_boxes_offsets(args):
     # Open two files
     with open(args['bfile_r1'], 'rb') as bf1:
         with open(args['bfile_w'], 'wb') as bfw:
-            for bf_path2, offset2 in zip(args['bfiles_r2'],
-                                        args['offsets2']):
+            for bf_path2, offset2 in zip(args['bfile_r2'],
+                                        args['offst_r2']):
                 # Go to the box in the files
                 h1 = bf1.readline()
                 h1 = h1.decode('ascii')
@@ -120,6 +120,7 @@ def parallel_combine_by_boxes_offsets(args):
                 # Write the header
                 bfw.write(hw)
                 # Get the data in the second file
+                print(bf_path2)
                 with open(bf_path2, 'rb') as bf2:
                     bf2.seek(offset2)
                     h2 = bf2.readline()
@@ -322,7 +323,7 @@ def validate_combine_input(*args, **kwargs) -> dict:
         output["pltout"] = kwargs["pltout"]
     return output
 
-def combine(pck1, pck2, pltout=None, 
+def combine(pck1, pck2, pltout=None,
             vars1=None, vars2=None, inplace=False):
     """
     Function to combine fields between plotfiles
@@ -349,7 +350,9 @@ def combine(pck1, pck2, pltout=None,
     pck1.write_global_header_new_fields(pltout, cbvars)
     pool = multiprocessing.Pool()
     # Combine the plotfile using the required mode
+    print(f'Combining files with mode {cbmode}')
     for lv in range(pck1.limit_level + 1):
+        print(f'Level {lv}...')
         lvstart = time.time()
         # Boxes are in the same files in the same order
         if cbmode == "byfile":
@@ -365,8 +368,8 @@ def combine(pck1, pck2, pltout=None,
                                                                   vidxs2=vidxs2))
         # Boxes are in different files (first plotfile structure is kept)
         elif cbmode == "bybox":
-            new_offsets = pool.map(parallel_combine_by_boxes_offsets,
-                                   pck.by_matched_boxes_output(pck2, lv, pltout,
+            new_offsets = pool.map(parallel_combine_by_binfile_offsets,
+                                   pck1.by_matched_boxes_output(pck2, lv, pltout,
                                                                vidxs1=vidxs1,
                                                                vidxs2=vidxs2))
         # Reorder the offsets to match the box order
