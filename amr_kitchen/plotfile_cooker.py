@@ -229,38 +229,70 @@ class LevelDataSelector(object):
             raise KeyError("Please enter point with valid 2d (x,y) or 3d (x,y,z) format")
 
         # Finds boxes containing point at each level
-        box_matches = {}
+        box_list_less = []
+        box_list_more = []
+        box_matches_less = {}
+        box_matches_more = {}
         for level in range(self.limit_level + 1):
             boxes = np.array(self.boxes[level])
             # All with equals so we catch boundaries
             # Point in x is lower the all boxes upper lower bound in x
             # TODO: First match for within box_lo + dx/2 <= point <= box_hi - dx/2
-            box_match = (boxes[:, 0, 0] <= point[0]) & \
-                        (point[0] <= boxes[:, 0, 1]) & \
-                        (boxes[:, 1, 0] <= point[1]) & \
-                        (point[1] <= boxes[:, 1, 1]) & \
-                        (boxes[:, 2, 0] <= point[2]) & \
-                        (point[2] <= boxes[:, 2, 1])
+            dx = self.dx[level]
+            box_match_less = (boxes[:, 0, 0] + dx[0]/2 <= point[0]) & \
+                        (point[0] <= boxes[:, 0, 1] - dx[0]/2) & \
+                        (boxes[:, 1, 0] + dx[1]/2 <= point[1]) & \
+                        (point[1] <= boxes[:, 1, 1] - dx[1]/2) & \
+                        (boxes[:, 2, 0] + dx[2]/2 <= point[2]) & \
+                        (point[2] <= boxes[:, 2, 1] - dx[2]/2)
+            box_list_less.append(list(box_match_less))
+
+            box_match_more = (boxes[:, 0, 0] - dx[0]/2 <= point[0]) & \
+                        (point[0] <= boxes[:, 0, 1] + dx[0]/2) & \
+                        (boxes[:, 1, 0] - dx[1]/2 <= point[1]) & \
+                        (point[1] <= boxes[:, 1, 1] + dx[1]/2) & \
+                        (boxes[:, 2, 0] - dx[2]/2 <= point[2]) & \
+                        (point[2] <= boxes[:, 2, 1] + dx[2]/2)
+            box_list_more.append(list(box_match_more))
+            
 
             # Only appends if there are matches
-            if any(box_match):
-                matching_indices = np.where(box_match == True)[0]
-                box_matches[level] = matching_indices
+            if any(box_match_less):
+                matching_indices = np.where(box_match_less == True)[0]
+                box_matches_less[level] = matching_indices
             else:
-                box_matches[level] = []
+                box_matches_less[level] = []
+
+            if any(box_match_more):
+                matching_indices = np.where(box_match_more == True)[0]
+                box_matches_more[level] = matching_indices
+            else:
+                box_matches_more[level] = []
 
         # Finest matching level
         #match_level = len(box_matches) - 1
-        match_level = [ky for ky in box_matches if len(box_matches[ky]) > 0][-1]
+        match_level = [ky for ky in box_matches_more if len(box_matches_more[ky]) > 0][-1]
         dx = self.dx[match_level]
         # Converts point to indices at this level
         # Scales back by 0.5, because the domain starts at dx/2 (index = 0)
         point_idx = (point / dx) - 0.5
 
+        # If box_lo + dx/2 <= point <= box_hi - dx/2 dosen't have any match, but
+        # box_lo - dx/2 <= point <= box_hi + dx/2 has a singular box match at the finest level 
+        # e.g. weird case with the (0,0,0) point using example_plt_3d
+        #TODO Find a better way to do that:
+        special_case = True
+        for level in box_matches_less:
+            if len(box_matches_less[level]) != 0:
+                special_case = False
+                break
+        if len(box_matches_more[match_level]) != 1:
+            special_case = False
+
         # This only works if the point is not between boxes
-        if len(box_matches[match_level]) == 1:
+        if box_list_less == box_list_more or special_case:
             # 3D data for a single box at the finest matching level
-            match_box_id = int(box_matches[match_level][0])
+            match_box_id = int(box_matches_more[match_level][0])
             data_arrays = self[match_level][match_box_id]
             box_indices = self.cells[match_level]['indexes'][match_box_id]
             point_local = point_idx - box_indices[0]
@@ -278,7 +310,7 @@ class LevelDataSelector(object):
                     point_data.append(point_data_field[0])
 
             return np.array(point_data)
-
+        
         else:
             # TODO: Test for box_lo - dx/2 <= point <= box_hi + dx/2
             # TODO: Replace with the right test: is the point contained by the scatter of the 
@@ -294,13 +326,40 @@ class LevelDataSelector(object):
 
             
             # if len(box_matches[-1]) = 1: -> Point is
+
+            """# Testing if the point is at a boundary shared only by finest level boxes
+            finest_containted = True
+            for level in range(len(box_matches_more) - 1):
+                if len(box_matches_more[level]) != 1:
+                    finest_containted = False
+                    break"""
             
+            # Let's find the min and the max for each dimensions of the finest_level
+            finest_min_max = []
+            boxes = self.boxes[match_level]
+
+            for dimension in range(len(point)):
+                current_min = boxes[0][dimension][0]
+                current_max = boxes[0][dimension][1]
+                for i in range(1, len(boxes)):
+                    if boxes[i][dimension][0] < current_min:
+                        current_min = boxes[i][dimension][0]
+                    if boxes[i][dimension][1] > current_max:
+                        current_max = boxes[i][dimension][1]
+                finest_min_max.append((current_min, current_max))
+
+            # Let's see if the point is in the finest level's domain
+            finest_contained = True
+            for dimension in range(len(point)):
+                if point[dimension] < finest_min_max[dimension][0] or point[dimension] > finest_min_max[dimension][1]:
+                    finest_contained = False
+                    break
 
             # If the point is only contained within the finest level:
-            if finest_containted:
+            if finest_contained:
                 # Loading the relevant boxes and their indices at the finest level to interpolate
-                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[match_level]]
-                finest_boxes = self[self.limit_level][box_matches[self.limit_level]]
+                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches_more[match_level]]
+                finest_boxes = self[self.limit_level][box_matches_more[self.limit_level]]
                 # Lowest and highest indices in each dimension from matched boxes
                 indices_lo = np.min(finest_boxes_indices[:, 0, :], axis=0)
                 indices_hi = np.max(finest_boxes_indices[:, 1, :], axis=0) + 1
@@ -335,7 +394,10 @@ class LevelDataSelector(object):
                 box_data_coarse = self[1][0]
                 old_indices = box_data_coarse.shape
                 new_indices_x = np.linspace(-0.25, old_indices[0] + 0.25 - 1, box_data_coarse.shape[0] * 2)
-                coordinates = np.meshgrid(new_indices_x, new_indices_y, new_indices_y)
+                new_indices_y = np.linspace(-0.25, old_indices[1] + 0.25 - 1, box_data_coarse.shape[1] * 2)
+                new_indices_z = np.linspace(-0.25, old_indices[2] + 0.25 - 1, box_data_coarse.shape[2] * 2)
+
+                coordinates = np.meshgrid(new_indices_x, new_indices_y, new_indices_z)
                 # Fine data of both levels
                 data_fine = map_coordinates(box_data_coarse, [coordinates.flatten(),
                                                             coordinates.flatten(),
@@ -344,7 +406,7 @@ class LevelDataSelector(object):
                 data_fine.reshape(16, 16, 16) # Replace (16, 16, 16) with box_data_coarse.shape * 2
 
                 # Loading the relevant boxes and their indices at the finest level - 1 to interpolate
-                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches[self.limit_level-1]]
+                finest_boxes_indices = np.array(self.cells[-1]['indexes'])[box_matches_more[self.limit_level-1]]
                 
                 # Lowest and highest indices in each dimension from matched boxes
                 indices_lo = np.min(finest_boxes_indices[:, 0, :], axis=0)
@@ -1207,3 +1269,9 @@ class PlotfileCooker(object):
                 lv_boxes.append(box)
             all_boxes.append(lv_boxes)
         return all_boxes
+
+
+if __name__ == "__main__":
+    plt = PlotfileCooker("./test_assets/example_plt_3d", maxmins=True)
+
+    print(plt["temp"](0.012,0.012,0.012))
