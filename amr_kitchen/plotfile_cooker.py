@@ -902,14 +902,12 @@ class PlotfileCooker(object):
                                     box_index_map):
             # Other binary files
             bfiles_2 = np.array(other.cells[lv]['files'])[box_indices]
-            # Other offsets
-            offsets_2 = np.array(other.cells[lv]['offsets'])[box_indices]
             # Offsets of the boxes in the binaries
             offsets_bf1 = np.array(self.cells[lv]['offsets'])[box_indices]
             offsets_bf2 = np.array(other.cells[lv]['offsets'])[box_indices]
             # Path to the combined binary files (for Windows)
             bfile_r1 = os.path.join(os.getcwd(), bf1)
-            bfile_r2 = os.path.join(os.getcwd(), bfiles_2[0])
+            bfile_r2 = [os.path.join(os.getcwd(), bf2) for bf2 in bfiles_2]
             # Path to the new binary file
             bfile_w = os.path.join(os.getcwd(),
                                    pltout,
@@ -940,13 +938,14 @@ class PlotfileCooker(object):
             offsets_bf1 = np.array(self.cells[lv]['offsets'])[box_indices]
             offsets_bf2 = np.array(other.cells[lv]['offsets'])[box_indices]
             # Path to the combined binary files (for Windows)
-            bfile_r1 = os.path.join(os.getcwd(), bf1)
-            bfile_r2 = os.path.join(os.getcwd(), bf2)
+            #bfile_r1 = os.path.join(os.getcwd(), bf1)
+            #bfile_r2 = os.path.join(os.getcwd(), bf2)
+            bfile_r1 = bf1
+            bfile_r2 = bf2
             # Path to the new binary file
-            bfile_w = os.path.join(os.getcwd(),
-                                   pltout,
-                                   os.path.basename(os.path.split(bfile_r1)[0]),
-                                   os.path.basename(bfile_r1))
+            bfile_w = os.path.join(pltout,
+                                   f"Level_{lv}",
+                                   os.path.split(bfile_r1)[-1])
             mp_call = {"bfile_r1":bfile_r1,
                        "offst_r1":offsets_bf1,
                        "bfile_r2":bfile_r2,
