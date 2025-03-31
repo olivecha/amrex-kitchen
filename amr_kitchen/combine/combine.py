@@ -2,6 +2,7 @@ import os
 import time
 import multiprocessing
 import numpy as np
+from tqdm import tqdm
 from amr_kitchen import PlotfileCooker
 from amr_kitchen.utils import (shape_from_header,
                                indices_from_header,
@@ -103,7 +104,7 @@ def parallel_combine_by_boxes_offsets(args):
     with open(args['bfile_r1'], 'rb') as bf1:
         with open(args['bfile_w'], 'wb') as bfw:
             for bf_path2, offset2 in zip(args['bfile_r2'],
-                                        args['offst_r2']):
+                                         args['offst_r2']):
                 # Go to the box in the files
                 h1 = bf1.readline()
                 h1 = h1.decode('ascii')
@@ -120,7 +121,6 @@ def parallel_combine_by_boxes_offsets(args):
                 # Write the header
                 bfw.write(hw)
                 # Get the data in the second file
-                print(bf_path2)
                 with open(bf_path2, 'rb') as bf2:
                     bf2.seek(offset2)
                     h2 = bf2.readline()
@@ -263,7 +263,7 @@ def validate_combine_input(*args, **kwargs) -> dict:
             output["mode"] = "bybox"
             break # Cannot get worse
         else:
-            for bf in bfiles_1:
+            for bf in np.unique(bfiles_1):
                 offsets_1 = np.array(args[0].cells[lv]['offsets'])[bf == bfiles_1]
                 offsets_2 = np.array(args[1].cells[lv]['offsets'])[bf == bfiles_2]
                 if not np.array_equal(np.argsort(offsets_1),
@@ -276,7 +276,8 @@ def validate_combine_input(*args, **kwargs) -> dict:
         vars1 = list(args[0].fields.keys())
     else:
         vars1 = []
-        for var in kwargs["vars1"]:
+        input_fields1 = kwargs["vars1"].split()
+        for var in input_fields1:
             if var in args[0].fields:
                 vars1.append(var)
             else:
@@ -357,7 +358,7 @@ def combine(pck1, pck2, pltout=None,
         # Boxes are in the same files in the same order
         if cbmode == "byfile":
             new_offsets = pool.map(parallel_combine_by_binfile,
-                                   pck1.by_matched_offsets_output(pck2, lv, pltout,
+                                   pck1.by_binfile_output(pck2, lv, pltout,
                                                                   vidxs1=vidxs1,
                                                                   vidxs2=vidxs2))
         # Boxes are in the same files by with different orders
@@ -368,10 +369,11 @@ def combine(pck1, pck2, pltout=None,
                                                                   vidxs2=vidxs2))
         # Boxes are in different files (first plotfile structure is kept)
         elif cbmode == "bybox":
-            new_offsets = pool.map(parallel_combine_by_binfile_offsets,
-                                   pck1.by_matched_boxes_output(pck2, lv, pltout,
-                                                               vidxs1=vidxs1,
-                                                               vidxs2=vidxs2))
+            new_offsets = tqdm(pool.imap(parallel_combine_by_boxes_offsets,
+                                         pck1.by_matched_offsets_output(pck2, lv, pltout,
+                                                                        vidxs1=vidxs1,
+                                                                        vidxs2=vidxs2)),
+                               total=len(np.unique(pck1.cells[lv]['files'])))
         # Reorder the offsets to match the box order
         mapped_offsets = np.empty(len(pck1.boxes[lv]), dtype=int)
         for file_idxs, offsets in zip(pck1.map_bfile_offsets(lv), new_offsets):
