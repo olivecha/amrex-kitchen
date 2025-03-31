@@ -19,6 +19,8 @@ class Mandoline(PlotfileCooker):
                   1:'y',
                   2:'z',
                   3:'2D'}
+    non_plot_fields = ['x', 'y', 'time',
+                       'dx', 'slice_normal', 'slice_pos']
 
     def __init__(self, plotfile, fields=None, limit_level=None,
                  serial=False, verbose=None):
@@ -310,7 +312,7 @@ class Mandoline(PlotfileCooker):
         figsize = self.infer_figure_size()
 
         # A figure per field
-        plot_names = [f for f in pltdata if f not in ['x', 'y']]
+        plot_names = [f for f in pltdata if f not in self.non_plot_fields]
         for name in plot_names:
 
             if self.v > 0:
