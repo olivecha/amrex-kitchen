@@ -6,7 +6,7 @@ from amr_kitchen.chk2plt import CheckpointReader, chk2plt
 
 class Testchk2plt(unittest.TestCase):
     chk3d = os.path.join("test_assets", "example_chk_3d")
-    plt_ref = os.path.join("test_assets", "example_chk_3d_plotfile_ref")
+    plt_ref = os.path.join("test_assets", "example_plt_3d")
 
     def test_checkpoint_reader(self):
 
