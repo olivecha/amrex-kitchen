@@ -217,8 +217,6 @@ class LevelDataSelector(object):
         return LevelDataStream(self.cells[key]['files'],
                                self.cells[key]['offsets'],
                                self.farg)
-    def __call__(self, x, y, z):
-        pass
 
     def __call__(self, *args):
 
