@@ -265,7 +265,7 @@ class LevelDataSelector(object):
                               (boxes[:, 2, 0] - dx[2]/2 <= point[2]) & \
                               (point[2] <= boxes[:, 2, 1] + dx[2]/2)
             box_matches_outer[level] = np.nonzero(box_match_outer)[0]
-            
+
         # Finest matching level for each box bounds condition
         match_lv_exact = [lv for lv in box_matches_exact if len(box_matches_exact[lv]) != 0][-1]
         try:
@@ -307,7 +307,7 @@ class LevelDataSelector(object):
                 # Array to store the output
                 point_data = []
                 # For each field index
-                for fid in self.farg:
+                for fid in range(len(self.farg)):
                     # interpolate each 3D array individually
                     point_data_field = map_coordinates(data_arrays[..., fid],
                                                        np.transpose([point_local]))
@@ -350,9 +350,9 @@ class LevelDataSelector(object):
             point_local = point_idx - indices_lo
             # Convert field indices to array for iteration
             if isinstance(self.farg, int):
-                field_ids = [self.farg]
+                field_ids = [0]
             else:
-                field_ids = self.farg
+                field_ids = range(len(self.farg))
             # Empty array to store interpolated data
             point_data = []
             # For each requested field
@@ -381,10 +381,10 @@ class LevelDataSelector(object):
                         conc_array[idx[0, 0]: idx[1, 0],
                                    idx[0, 1]: idx[1, 1],
                                    idx[0, 2]: idx[1, 2]] = data
-                    point_value = map_coordinates(conc_array, np.transpose([point_local]))
-                    point_data.append(point_value[0])
+                point_value = map_coordinates(conc_array, np.transpose([point_local]))
+                point_data.append(point_value[0])
             return point_data
-        
+
 
 class PlotfileCooker(object):
 
