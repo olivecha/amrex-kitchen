@@ -42,8 +42,9 @@ def chefs_knife_single_field(args):
                 # shape of the box
                 boxshape = tuple([datashape[i] for i in range(3)])
                 # Compute the new binary header (Always one field)
+                n_keep = len(args['ids_keep'])
                 header_w = header.replace(f'{datashape[-1]}\n',
-                                          '1\n')
+                                          f'{n_keep}\n')
                 # Write the new header
                 bfw.write(header_w.encode('ascii'))
                 # Read the data
@@ -60,11 +61,20 @@ def chefs_knife_single_field(args):
                 sarray = SARRAYS[boxshape]
                 sarray.TPY = T, P, Y
                 newdata = sarray.__getattribute__(args['recipe'])
-                mins.append(np.min(newdata))
-                maxs.append(np.max(newdata))
-                bfw.write(newdata.flatten(order="F").tobytes())
+                # Concatenate with old data
+                if len(args['ids_keep']) > 0:
+                    olddata = arr[..., args['ids_keep']]
+                    alldata = np.concatenate([olddata, newdata], axis=3)
+                else:
+                    alldata = newdata[..., np.newaxis]
 
-    return offsets, np.array([mins]).T, np.array([maxs]).T
+                min_values = np.min(alldata, axis=(0, 1, 2))
+                max_values = np.max(alldata, axis=(0, 1, 2))
+                mins.append(min_values)
+                maxs.append(max_values)
+                bfw.write(alldata.flatten(order="F").tobytes())
+
+    return offsets, np.array(mins), np.array(maxs)
 
 
 def chefs_knife_byspecies_field(args):
@@ -95,8 +105,9 @@ def chefs_knife_byspecies_field(args):
                 # shape of the box
                 boxshape = tuple([datashape[i] for i in range(3)])
                 # Compute the new binary header (Number of species)
+                n_keeps = len(args['ids_keep'])
                 header_w = header.replace(f'{datashape[-1]}\n',
-                                          f"{outnfields}\n")
+                                          f"{outnfields + n_keeps}\n")
                 # Write the new header
                 bfw.write(header_w.encode('ascii'))
                 # Read the data
@@ -116,9 +127,13 @@ def chefs_knife_byspecies_field(args):
                 newdata = sarray.__getattribute__(args['recipe'])
                 # Index the required species
                 newdata = newdata[:, :, :, args['sp_indexes']]
-                mins.append(np.min(newdata, axis=(0, 1, 2)))
-                maxs.append(np.max(newdata, axis=(0, 1, 2)))
-                bfw.write(newdata.flatten(order="F").tobytes())
+                # Slice and concatenate the kept data
+                olddata = arr[..., args['ids_keep']]
+                alldata = np.concatenate([olddata, newdata], axis=3)
+                # compute min/maxs
+                mins.append(np.min(alldata, axis=(0, 1, 2)))
+                maxs.append(np.max(alldata, axis=(0, 1, 2)))
+                bfw.write(alldata.flatten(order="F").tobytes())
     return offsets, np.array([mins]), np.array([maxs])
 
 def chefs_knife_byreaction_field(args):
@@ -149,8 +164,9 @@ def chefs_knife_byreaction_field(args):
                 # shape of the box
                 boxshape = tuple([datashape[i] for i in range(3)])
                 # Compute the new binary header (Always one field)
-                header_w = header.replace(f'{datashape[-1]}\n', 
-                                          f'{outnfields}\n')
+                n_keep = len(args['ids_keep'])
+                header_w = header.replace(f'{datashape[-1]}\n',
+                                          f'{outnfields + n_keep}\n')
                 # Write the new header
                 bfw.write(header_w.encode('ascii'))
                 # Read the data
@@ -170,10 +186,13 @@ def chefs_knife_byreaction_field(args):
                 newdata = sarray.__getattribute__(args['recipe'])
                 # Index the required species
                 newdata = newdata[:, :, :, args['rx_indexes']]
-                mins.append(np.min(newdata, axis=(0, 1, 2)))
-                maxs.append(np.max(newdata, axis=(0, 1, 2)))
-                bfw.write(newdata.flatten(order="F").tobytes())
-    return offsets, np.array([mins]), np.array([maxs])
+                # Concatenate with the kept data
+                olddata = arr[..., args['ids_keep']]
+                alldata = np.concatenate([olddata, newdata], axis=3)
+                mins.append(np.min(alldata, axis=(0, 1, 2)))
+                maxs.append(np.max(alldata, axis=(0, 1, 2)))
+                bfw.write(alldata.flatten(order="F").tobytes())
+    return offsets, np.array(mins), np.array(maxs)
 
 def chefs_knife_user_sarray(args):
     """
@@ -201,11 +220,6 @@ def chefs_knife_user_sarray(args):
                 offsets.append(bfw.tell())
                 # shape of the box
                 boxshape = tuple([datashape[i] for i in range(3)])
-                # Compute the new binary header (Always one field)
-                header_w = header.replace(f'{datashape[-1]}\n', 
-                                          '1\n')
-                # Write the new header
-                bfw.write(header_w.encode('ascii'))
                 # Read the data
                 arr = np.fromfile(bfr, "float64", np.prod(datashape))
                 arr = arr.reshape(datashape, order="F")
@@ -224,12 +238,36 @@ def chefs_knife_user_sarray(args):
                 newdata = args['recipe'](args['field_indexes'],
                                          arr,
                                          sarray)
-                # Index the required species
-                mins.append(np.min(newdata))
-                maxs.append(np.max(newdata))
-                bfw.write(newdata.flatten(order="F").tobytes())
+                # number of computed components
+                ncomps = None
+                if len(newdata.shape) < 4:
+                    newdata = newdata[..., np.newaxis]
+                    ncomps = 1
 
-    return offsets, np.array([mins]).T, np.array([maxs]).T
+                else:
+                    ncomps = newdata.shape[-1]
+
+                # Compute the new binary header (Always one field)
+                nfields = ncomps + len(args['ids_keep'])
+                header_w = header.replace(f'{datashape[-1]}\n', 
+                                          f'{nfields}\n')
+                # Write the new header
+                bfw.write(header_w.encode('ascii'))
+
+                if args['ids_keep'] != []:
+                    alldata = np.concatenate([arr[..., args['ids_keep']],
+                                              newdata], axis=3)
+                else:
+                    alldata = newdata
+
+                # Index the required species
+                min_values = np.min(alldata, axis=(0, 1, 2))
+                max_values = np.max(alldata, axis=(0, 1, 2))
+                mins.append(min_values)
+                maxs.append(max_values)
+                bfw.write(alldata.flatten(order="F").tobytes())
+
+    return offsets, np.array(mins), np.array(maxs)
 
 def chefs_knife_user_pfile(args):
     """
@@ -259,24 +297,40 @@ def chefs_knife_user_pfile(args):
                 offsets.append(bfw.tell())
                 # shape of the box
                 boxshape = tuple([datashape[i] for i in range(3)])
-                # Compute the new binary header (Always one field)
-                header_w = header.replace(f'{datashape[-1]}\n', 
-                                          '1\n')
-                # Write the new header
-                bfw.write(header_w.encode('ascii'))
                 # Read the data
                 arr = np.fromfile(bfr, "float64", np.prod(datashape))
                 arr = arr.reshape(datashape, order="F")
                 # Call the user defined function with the field indexes
                 newdata = args['recipe'](args['field_indexes'],
                                          arr)
-                # Compute the max/mins
-                mins.append(np.min(newdata))
-                maxs.append(np.max(newdata))
-                # Write to the new binary file
-                bfw.write(newdata.flatten(order="F").tobytes())
+                ncomps = None
+                # Add a fourth axis to concatenate with other fields
+                if len(newdata.shape) < 4:
+                    newdata = newdata[..., np.newaxis]
+                    ncomps = 1
+                else:
+                    ncomps = newdata.shape[-1]
 
-    return offsets, np.array([mins]).T, np.array([maxs]).T
+                # Compute the new binary header (with kept fields)
+                nfields = ncomps + len(args['ids_keep'])
+                header_w = header.replace(f'{datashape[-1]}\n',
+                                          f'{nfields}\n')
+                # Write the new header
+                bfw.write(header_w.encode('ascii'))
+
+                if args['ids_keep'] != []:
+                    alldata = np.concatenate([arr[..., args['ids_keep']],
+                                              newdata], axis=3)
+                else:
+                    alldata = newdata
+
+                min_values = np.min(alldata, axis=(0, 1, 2))
+                max_values = np.max(alldata, axis=(0, 1, 2))
+                mins.append(min_values)
+                maxs.append(max_values)
+                bfw.write(alldata.flatten(order="F").tobytes())
+
+    return offsets, np.array(mins), np.array(maxs)
 
 class Chef(PlotfileCooker):
 
@@ -326,7 +380,7 @@ class Chef(PlotfileCooker):
     
     def __init__(self, plotfile=None, recipe=None, outfile=None,
                  species=None, reactions=None, mech=None, 
-                 pressure=None, serial=False):
+                 pressure=None, serial=False, kept_fields=None):
         # Instantiate the PlotfileCooker parent
         super().__init__(plotfile)
         # Only work on 3 dimension data
@@ -360,10 +414,23 @@ class Chef(PlotfileCooker):
         # Index of the O2 species in the Solution
         self.idx_O2 = None
 
+        self.ids_keep = []
+        if kept_fields is not None:
+            kept_fields = kept_fields.split()
+            for f in kept_fields:
+                try:
+                    self.ids_keep.append(self.fields[f])
+                except KeyError:
+                    pass
+
         # Case for user recipe in a .py file
         if recipe.split('.')[-1] == 'py':
             self.recipe = self.import_user_recipe(recipe)
             self.requires_sol, self.outfields = self.get_user_recipe_info()
+            print(self.outfields)
+            for fid in self.ids_keep:
+                self.outfields.append(list(self.fields.keys())[fid])
+
             if self.requires_sol:
                 self.knife = chefs_knife_user_sarray
             else:
@@ -471,6 +538,7 @@ class Chef(PlotfileCooker):
                         "sp_end":self.sp_end,
                         "field_indexes":self.fields,
                         "id_temp":self.id_temp,
+                        "ids_keep":self.ids_keep,
                         "idx_O2":self.idx_O2}
                 mp_calls.append(call)
 
@@ -554,7 +622,7 @@ class Chef(PlotfileCooker):
         # Get the recipe function docstring and use it as a field name
         # in the new plotfile
         try:
-            outfields = [self.recipe.__doc__.split()[0]]
+            outfields = self.recipe.__doc__.split()
         # Default value is "user_defined"
         except AttributeError:
             outfields = ['user_defined']

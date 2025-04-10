@@ -44,6 +44,9 @@ def main():
     parser.add_argument(
             "--pressure", "-p", type=float,
             help="Pressure of the simulation data (atm)")
+    parser.add_argument(
+            "--kept_fields", "-k", type=str,
+            help="Fields to keep in the output plotfile")
 
     args = parser.parse_args()
 
@@ -55,7 +58,8 @@ def main():
                      reactions=args.reactions,
                      mech=args.mech,
                      serial=False,
-                     pressure=args.pressure)
+                     pressure=args.pressure,
+                     kept_fields=args.kept_fields)
     plot_chef.cook()
 
 if __name__ == "__main__":
