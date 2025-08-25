@@ -22,7 +22,7 @@ def readfieldfrombinfile(args):
         while True:
             try:
                 h = bfile.readline()
-                idx = indices_from_header(h)
+                idx = indices_from_header(h.decode("utf-8"))
                 shape = idx[1] - idx[0] + 1
                 tshape = [shape[0], shape[1], shape[2], N_FIELDS]
                 bfile.seek(np.prod(shape)*FIELD_INDEX*8, 1)
