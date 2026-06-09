@@ -2,7 +2,7 @@ import os
 import unittest
 import numpy as np
 
-from amr_kitchen import PlotfileCooker
+from amr_kitchen import PlotfileCooker, DTYPE
 
 class TestSliceData(unittest.TestCase):
     pfile2d = "test_assets/example_plt_2d"
@@ -43,8 +43,8 @@ class TestSliceData(unittest.TestCase):
                         shape = [idx[1][i] - idx[0][i] + 1 for i in range(hdr.ndims)]
                         shape.append(len(hdr.fields))
                         bf.seek(ofs)
-                        arr = np.fromfile(bf, 'float64', np.prod(shape))
-                        
+                        arr = np.fromfile(bf, DTYPE, np.prod(shape))
+
     def test_bybinfile_iterator3d(self):
         hdr = PlotfileCooker(self.pfile3d)
         for lv in range(hdr.limit_level + 1):
@@ -54,5 +54,5 @@ class TestSliceData(unittest.TestCase):
                         shape = [idx[1][i] - idx[0][i] + 1 for i in range(hdr.ndims)]
                         shape.append(len(hdr.fields))
                         bf.seek(ofs)
-                        arr = np.fromfile(bf, 'float64', np.prod(shape))
-                    
+                        arr = np.fromfile(bf, DTYPE, np.prod(shape))
+

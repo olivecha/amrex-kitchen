@@ -1,4 +1,4 @@
-from .plotfile_cooker import PlotfileCooker
+from .plotfile_cooker import PlotfileCooker, DTYPE
 from . import mandoline
 from . import colander
 from . import chef

@@ -7,12 +7,14 @@ from tqdm import tqdm
 from scipy.ndimage import map_coordinates, zoom
 from amr_kitchen.utils import TastesBadError, shape_from_header, expand_array3d
 
+DTYPE='float64'
+
 def mp_read_box_single_field(args):
     with open(args[0], 'rb') as bf:
         bf.seek(args[1])
         shape = shape_from_header(bf.readline().decode('ascii'))
         bf.seek(np.prod(shape[:-1]) * args[2] * 8, 1)
-        data = np.fromfile(bf, 'float64', np.prod(shape[:-1]))
+        data = np.fromfile(bf, DTYPE, np.prod(shape[:-1]))
     return data.reshape(shape[:-1], order='F')
 
 def mp_read_box_slice_field(args):
@@ -22,7 +24,7 @@ def mp_read_box_slice_field(args):
         start, stop = args[2].indices(shape[-1])[:2]
         slice_size = stop - start
         bf.seek(np.prod(shape[:-1]) * start * 8, 1)
-        data = np.fromfile(bf, 'float64', np.prod(shape[:-1]) * slice_size)
+        data = np.fromfile(bf, DTYPE, np.prod(shape[:-1]) * slice_size)
     data = data.reshape(np.append(shape[:-1], slice_size), order='F')
     return data[..., args[2]]
 
@@ -32,7 +34,7 @@ def mp_read_box_index_field(args):
         bf.seek(args[1])
         shape = shape_from_header(bf.readline().decode('ascii'))
         bf.seek(np.prod(shape[:-1]) * args[2][0] * 8, 1)
-        data = np.fromfile(bf, 'float64', np.prod(shape[:-1])*diff)
+        data = np.fromfile(bf, DTYPE, np.prod(shape[:-1])*diff)
     data = data.reshape(np.append(shape[:-1], diff), order='F')
     return data[..., np.array(args[2]) - args[2][0]]
 
@@ -43,7 +45,7 @@ def mp_read_bfile_single_field(args):
             try:
                 shape = shape_from_header(bf.readline().decode('ascii'))
                 bf.seek(np.prod(shape[:-1]) * args[1] * 8, 1)
-                data = np.fromfile(bf, 'float64', np.prod(shape[:-1]))
+                data = np.fromfile(bf, DTYPE, np.prod(shape[:-1]))
                 bf.seek(np.prod(shape[:-1]) * (shape[-1] - args[1] - 1) * 8, 1)
                 file_data.append(data.reshape(shape[:-1], order='F'))
             except:
@@ -59,7 +61,7 @@ def mp_read_bfile_slice_field(args):
                 start, stop = args[1].indices(shape[-1])[:2]
                 slice_size = stop - start
                 bf.seek(np.prod(shape[:-1]) * start * 8, 1)
-                data = np.fromfile(bf, 'float64', np.prod(shape[:-1]) * slice_size)
+                data = np.fromfile(bf, DTYPE, np.prod(shape[:-1]) * slice_size)
                 bf.seek(np.prod(shape[:-1]) * (shape[-1] - slice_size - start) * 8, 1)
                 data = data.reshape(np.append(shape[:-1], slice_size), order='F')
                 file_data.append(data[..., args[1]])
@@ -100,7 +102,7 @@ def mp_read_bfile_index_field(args):
                 # Go to next field
                 bf.seek((fid - current_idx) * dsize, 1)
                 # Load the data and add to output
-                box_data[..., i] = np.fromfile(bf, 'float64', fsize).reshape(shape[:-1], order='F')
+                box_data[..., i] = np.fromfile(bf, DTYPE, fsize).reshape(shape[:-1], order='F')
                 current_idx = fid + 1
             # Go to next box
             bf.seek((shape[-1] - current_idx) * dsize, 1)
@@ -441,7 +443,8 @@ class PlotfileCooker(object):
                  validate_mode: bool = False,
                  maxmins: bool = False,
                  ghost: bool = False,
-                 serial: bool = False):
+                 serial: bool = False,
+                 dtype: str = None):
         """
         Parse the header data and save as attributes
         ___
@@ -457,6 +460,10 @@ class PlotfileCooker(object):
         ghost: if True the ghost cells around each box are computed by creating
                3D arrays where the value is the index of the box for each level
         """
+        # Set the data type to read files
+        global DTYPE
+        if dtype is not None:
+            DTYPE=dtype
         self.serial = serial
         self.pfile = plotfile_path
         filepath = os.path.join(self.pfile, 'Header')
@@ -520,12 +527,13 @@ class PlotfileCooker(object):
                 if validate_mode:
                     # Get the actual exception string
                     catched_tback = traceback.format_exc()
+                    formatted_tback = catched_tback.split(r'\n')
                     raise TastesBadError((f"PlotfileCooker encountered a fatal"
                                           f" exception while reading the boxes"
                                            " coordinates in the method self.read_boxes."
                                            " This could be due to missing or badly"
-                                           " formated box data. The exception message is:"
-                                          f" {catched_tback}"))
+                                           " formated box data. The exception message is: ") +
+                                           r' '.join(formatted_tback))
                 else:
                     raise e
 
@@ -539,13 +547,15 @@ class PlotfileCooker(object):
             except Exception as e:
                 if validate_mode:
                     catched_tback = traceback.format_exc()
+                    formatted_tback = catched_tback.split('\n')
+
                     raise TastesBadError((f"PlotfileCooker encountered a fatal"
                                           f" exception while reading the binary"
                                            " paths and global grid indices in the level"
                                            " headers, inside the method self.read_cell_headers."
                                            " This could be due to missing or badly"
-                                           " formated box data. The exception message is:\n"
-                                          f" \n {catched_tback}"))
+                                           " formated box data. The exception message is: ") +
+                                           r' '.join(formatted_tback))
                 else:
                     raise e
         # Gets the number fields in the plt_file
@@ -692,6 +702,8 @@ class PlotfileCooker(object):
         # dicts to store box bounds and centers
         points = []
         boxes = []
+        level_dirs = []
+        hdr_names = []
         self.npoints = []
         self.cell_paths = []
         # Loop over the grid levels
@@ -706,7 +718,7 @@ class PlotfileCooker(object):
             else:
                 hfile.readline()
             # Sanity check
-            assert current_level == lv
+            assert current_level == lv, "Something wrong with the successive AMR levels"
             # Key for the dict
             self.npoints.append(n_cells)
             lv_points = []
@@ -720,10 +732,14 @@ class PlotfileCooker(object):
                     point.append(lo + (hi - lo)/2)
                 lv_points.append(point)
                 lv_boxes.append(box)
-            cell_dir = hfile.readline().split('/')[0]
+            line = hfile.readline()
+            cell_dir, cell_hdr_name = os.path.split(line.strip('\n'))
+            hdr_names.append(cell_hdr_name)
             self.cell_paths.append(cell_dir)
             points.append(lv_points)
             boxes.append(lv_boxes)
+        assert np.all(np.array(hdr_names) == hdr_names[0]), "file prefix are different between levels"
+        self.prefix = hdr_names[0]
         return points, boxes
 
     def read_cell_headers(self, maxmins, validate_mode):
@@ -737,7 +753,7 @@ class PlotfileCooker(object):
             lvcells = {}
             all_maxs.append({})
             all_mins.append({})
-            cfile_path = os.path.join(self.pfile, self.cell_paths[i], "Cell_H")
+            cfile_path = os.path.join(self.pfile, self.cell_paths[i], f"{self.prefix}_H")
             with open(cfile_path) as cfile:
                 # Skip 2 lines
                 cfile.readline()
@@ -1288,7 +1304,7 @@ class PlotfileCooker(object):
                     for d in range(self.ndims):
                         hfile.write(f"{box[d][0]} {box[d][1]}\n")
                 # Write the Level path info
-                hfile.write(f"Level_{lv}/Cell\n")
+                hfile.write(f"Level_{lv}/{self.prefix}\n")
 
     def writehdrnewboxes(self, pfdir, boxes, fields):
         """
@@ -1351,7 +1367,7 @@ class PlotfileCooker(object):
                     for i in range(self.ndims):
                         hfile.write(f"{box[i][0]} {box[i][1]}\n")
                 # Write the Level path info
-                hfile.write(f"Level_{lv}/Cell\n")
+                hfile.write(f"Level_{lv}/{self.prefix}\n")
 
     def boxesfromindices(self, indexes):
         """
