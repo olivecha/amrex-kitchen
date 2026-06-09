@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import numpy as np
 import argparse
@@ -47,14 +48,19 @@ def main():
     if args.plotfile is None:
         raise ValueError("Must specify a plotfile to validate")
 
-    Taster(plt_file=args.plotfile,
-           limit_level=args.limit_level,
-           binary_headers=args.no_bin_headers,
-           binary_shape=args.no_bin_shape,
-           binary_data=args.bin_data,
-           boxes_coordinates=args.box_coords,
-           nofail=args.nofail,
-           verbose=args.verbose)
+    try:
+        Taster(plt_file=args.plotfile,
+               limit_level=args.limit_level,
+               binary_headers=args.no_bin_headers,
+               binary_shape=args.no_bin_shape,
+               binary_data=args.bin_data,
+               boxes_coordinates=args.box_coords,
+               nofail=args.nofail,
+               verbose=args.verbose)
+    except Exception as e:
+        print((f"Found error in plotfile {args.plotfile} :"
+               f"{type(e).__name__}: {e}"))
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
