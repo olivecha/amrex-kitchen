@@ -274,20 +274,23 @@ class Mandoline(PlotfileCooker):
         the dataset aspect ratio
         """
         # Aspect ratio
-        Lx = self.geo_low[self.cx] - self.geo_high[self.cx]
-        Ly = self.geo_low[self.cy] - self.geo_high[self.cy]
+        Lx = self.geo_high[self.cx] - self.geo_low[self.cx]
+        Ly = self.geo_high[self.cy] - self.geo_low[self.cy]
+        print('Lx:', Lx, 'Ly:', Ly, 'aspect:', Lx/Ly)
         aspect = Lx / Ly
         # Horizontal
         if aspect > 1:
             size_x = 7
-            size_y = int(size_x / aspect)
-            figsize = (size_x + 1, size_y)
+            size_y = size_x / aspect
+            figsize = (size_x + 1, max(size_y, 3))
+        # Vertical
         elif aspect < 1:
             size_y = 7
-            size_x = int(size_y * aspect)
-            figsize = (size_x + 1, size_y)
+            size_x = size_y * aspect
+            figsize = (max(size_x + 1, 4), size_y)
         else:
             figsize=(8, 6)
+        print(figsize)
         return figsize
 
     def plot_slice(self, all_data, outfile, 
@@ -351,6 +354,7 @@ class Mandoline(PlotfileCooker):
             # save and close
             if outfile is None:
                 outfile = self.default_output_path(fieldname=name)
+            plt.tight_layout()
             fig.savefig(outfile, dpi=500)
             plt.close(fig)
 
