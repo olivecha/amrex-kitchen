@@ -125,7 +125,10 @@ class Menu(PlotfileCooker):
         if compatible:
             self.show_variables(variables)
             species = self.species_finder()
-            self.show_species(species)
+            try:
+                self.show_species(species)
+            except IndexError:
+                pass
     
     def find_min_max(self):
         min_and_max = {}
