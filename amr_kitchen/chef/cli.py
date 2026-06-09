@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import numpy as np
 import argparse
@@ -51,16 +52,29 @@ def main():
     args = parser.parse_args()
 
     # Chef object
-    plot_chef = Chef(args.plotfile,
-                     outfile=args.outdir,
-                     recipe=args.recipe,
-                     species=args.species,
-                     reactions=args.reactions,
-                     mech=args.mech,
-                     serial=False,
-                     pressure=args.pressure,
-                     kept_fields=args.kept_fields)
-    plot_chef.cook()
+    try:
+        plot_chef = Chef(args.plotfile,
+                         outfile=args.outdir,
+                         recipe=args.recipe,
+                         species=args.species,
+                         reactions=args.reactions,
+                         mech=args.mech,
+                         serial=False,
+                         pressure=args.pressure,
+                         kept_fields=args.kept_fields)
+    except Exception as e:
+        print((f"Failed to initialize chef class with the following error: "
+               f"{type(e).__name__}: {e}"))
+        sys.exit(1)
+
+    # Run the tool
+    try:
+        plot_chef.cook()
+        sys.exit(0)
+    except Exception as e:
+        print((f"Failed to run chef tool with the following error: "
+               f"{type(e).__name__}: {e}"))
+        sys.exit(2)
 
 if __name__ == "__main__":
     main()
