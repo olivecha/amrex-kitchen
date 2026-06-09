@@ -79,8 +79,13 @@ def main():
     N_FIELDS = len(pck.fields)
     FIELD_INDEX = pck.fields[args.variable]
 
+    if args.limit_level is None:
+        limit_level = pck.limit_level
+    else:
+        limit_level = args.limit_level
+
     # Covering grid array size
-    grid_shape = pck.grid_sizes[pck.limit_level]
+    grid_shape = pck.grid_sizes[limit_level]
     dtype_size = np.array([], dtype=args.dtype).itemsize
     total_size = np.prod(grid_shape) * dtype_size
     human_size = naturalsize(total_size)
@@ -93,9 +98,11 @@ def main():
         print("You can use less precise data types to reduce the required memory.")
         sys.exit()
     elif do_grid == 'y':
-        data = np.zeros(pck.grid_sizes[pck.limit_level], dtype=args.dtype)
+        print('Creating empty array...')
+        data = np.zeros(pck.grid_sizes[limit_level], dtype=args.dtype)
         # For each AMR Level
-        for lv in range(pck.limit_level + 1):
+        print('Reading data')
+        for lv in range(int(limit_level) + 1):
             # Order binary files by size so multiprocessing is a bit faster
             # (Large files take more time so we do them first)
             binfiles = np.unique(pck.cells[lv]['files'])
