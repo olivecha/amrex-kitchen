@@ -64,7 +64,7 @@ def chefs_knife_single_field(args):
                 # Concatenate with old data
                 if len(args['ids_keep']) > 0:
                     olddata = arr[..., args['ids_keep']]
-                    alldata = np.concatenate([olddata, newdata], axis=3)
+                    alldata = np.concatenate([olddata, newdata[..., np.newaxis]], axis=3)
                 else:
                     alldata = newdata[..., np.newaxis]
 
@@ -233,6 +233,12 @@ def chefs_knife_user_sarray(args):
                 Y[np.isclose(np.sum(Y, axis=3), 0), args['idx_O2']] = 1.0
                 sarray = SARRAYS[boxshape]
                 sarray.TPY = T, P, Y
+                # Add box indices to field argument
+                starts, stops = header.split('(')[-3:-1]
+                starts = np.array(starts.replace(')', '').split(','), dtype=int)
+                stops = np.array(stops.replace(')', '').split(','), dtype=int)
+                args['field_indexes']['idx_start'] = starts
+                args['field_indexes']['idx_stop'] = stops
                 # Call the user defined function with the field indexes
                 # box array and solution array as arguments
                 newdata = args['recipe'](args['field_indexes'],
@@ -300,6 +306,12 @@ def chefs_knife_user_pfile(args):
                 # Read the data
                 arr = np.fromfile(bfr, "float64", np.prod(datashape))
                 arr = arr.reshape(datashape, order="F")
+                # Pass the box indices in args['field_indexes']
+                starts, stops = header.split('(')[-3:-1]
+                starts = np.array(starts.replace(')', '').split(','), dtype=int)
+                stops = np.array(stops.replace(')', '').split(','), dtype=int)
+                args['field_indexes']['idx_start'] = starts
+                args['field_indexes']['idx_stop'] = stops
                 # Call the user defined function with the field indexes
                 newdata = args['recipe'](args['field_indexes'],
                                          arr)
@@ -324,12 +336,15 @@ def chefs_knife_user_pfile(args):
                 else:
                     alldata = newdata
 
-                min_values = np.min(alldata, axis=(0, 1, 2))
-                max_values = np.max(alldata, axis=(0, 1, 2))
+                min_values = np.nanmin(alldata, axis=(0, 1, 2))
+                min_values[min_values == -np.inf] = -1.7976931348623157e+308
+                min_values[np.isnan(min_values)] = -1.7976931348623157e+308
+                max_values = np.nanmax(alldata, axis=(0, 1, 2))
+                max_values[max_values == np.inf] = 1.7976931348623157e+308
+                max_values[np.isnan(max_values)] = 1.7976931348623157e+308
                 mins.append(min_values)
                 maxs.append(max_values)
                 bfw.write(alldata.flatten(order="F").tobytes())
-
     return offsets, np.array(mins), np.array(maxs)
 
 class Chef(PlotfileCooker):
@@ -377,7 +392,7 @@ class Chef(PlotfileCooker):
                   'RRi': "R",
                   'SDi': "DI",}
 
-    
+
     def __init__(self, plotfile=None, recipe=None, outfile=None,
                  species=None, reactions=None, mech=None, 
                  pressure=None, serial=False, kept_fields=None):
@@ -417,6 +432,8 @@ class Chef(PlotfileCooker):
         self.ids_keep = []
         if kept_fields is not None:
             kept_fields = kept_fields.split()
+            if kept_fields[0] == 'all':
+                kept_fields = list(self.fields.keys())
             for f in kept_fields:
                 try:
                     self.ids_keep.append(self.fields[f])
@@ -427,9 +444,6 @@ class Chef(PlotfileCooker):
         if recipe.split('.')[-1] == 'py':
             self.recipe = self.import_user_recipe(recipe)
             self.requires_sol, self.outfields = self.get_user_recipe_info()
-            print(self.outfields)
-            for fid in self.ids_keep:
-                self.outfields.append(list(self.fields.keys())[fid])
 
             if self.requires_sol:
                 self.knife = chefs_knife_user_sarray
@@ -479,11 +493,20 @@ class Chef(PlotfileCooker):
                 self.outfields = [self.cookfields[recipe]]
                 self.knife = chefs_knife_single_field
 
+
         # Error if no recipe can be found
         else:
             raise ValueError((f"The recipe {recipe} is not in the cookbook\n"
                               "Available recipes are:\n"
                               f"{[self.cookbookhelp[recipe] for recipe in self.cookbook]}"))
+        kept_field_names = []
+        # Append the kept fields
+        for fid in self.ids_keep:
+            kept_field_names.append(list(self.fields.keys())[fid])
+
+        self.outfields = kept_field_names + self.outfields
+
+        print(self.outfields)
 
         # Define the Cantera Solution if needed
         if self.requires_sol:
@@ -525,9 +548,13 @@ class Chef(PlotfileCooker):
                 # So they match the read order
                 bf_offsets_r = level_offsets[bf_mask]
                 box_index_map.append(bf_indexes[np.argsort(bf_offsets_r)])
+                field_indices = self.fields.copy()
+                field_indices['level'] = lv
+                field_indices['dx'] = self.dx[lv][0]
+                field_indices['grid_sizes'] = self.grid_sizes[lv]
                 # New binary file
-                newbfpath = os.path.join(self.outdir, 
-                                         self.cell_paths[lv], 
+                newbfpath = os.path.join(self.outdir,
+                                         self.cell_paths[lv],
                                          os.path.split(bfpath)[-1])
                 call = {"recipe":self.recipe,
                         "bfpath":bfpath,
@@ -536,7 +563,7 @@ class Chef(PlotfileCooker):
                         "rx_indexes":self.rx_indexes,
                         "sp_start":self.sp_start,
                         "sp_end":self.sp_end,
-                        "field_indexes":self.fields,
+                        "field_indexes":field_indices,
                         "id_temp":self.id_temp,
                         "ids_keep":self.ids_keep,
                         "idx_O2":self.idx_O2}
