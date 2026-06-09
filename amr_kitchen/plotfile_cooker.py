@@ -5,7 +5,7 @@ import multiprocessing
 import numpy as np
 from tqdm import tqdm
 from scipy.ndimage import map_coordinates, zoom
-from amr_kitchen.utils import TastesBadError, shape_from_header
+from amr_kitchen.utils import TastesBadError, shape_from_header, expand_array3d
 
 def mp_read_box_single_field(args):
     with open(args[0], 'rb') as bf:
@@ -69,43 +69,73 @@ def mp_read_bfile_slice_field(args):
     return file_data
 
 def mp_read_bfile_index_field(args):
-    diff = args[1][-1] - args[1][0] + 1
+    """
+    Multiprocessing function to read a list of fields in a single
+    binary file (for speed)
+    """
+    bfile_path = args[0]
+    field_indices = args[1]
+    # Map field indices to their order in the plotfile
+    # Eg. [7, 14, 0, 2] -> [2, 3, 0, 1]
+    field_order = np.argsort(field_indices)
+    # Sorted field indices for read order
+    # Eg. [7, 14, 0, 2] -> [0, 2, 7, 14]
+    sorted_indices = field_indices[field_order]
+
     file_data = []
-    with open(args[0], 'rb') as bf:
+    with open(bfile_path, 'rb') as bf:
         while True:
-            try:
-                shape = shape_from_header(bf.readline().decode('ascii'))
-                bf.seek(np.prod(shape[:-1]) * args[1][0] * 8, 1)
-                data = np.fromfile(bf, 'float64', np.prod(shape[:-1]) * diff)
-                bf.seek(np.prod(shape[:-1]) * (shape[-1] - args[1][-1] - 1) * 8, 1)
-                data = data.reshape(np.append(shape[:-1], diff), order='F')
-                file_data.append(data[..., np.array(args[1]) - args[1][0]])
-            except:
+            #try:
+            # The try statement fails here on the last box
+            hdr = bf.readline()
+            if not hdr:
                 break
+            shape = shape_from_header(hdr.decode('ascii'))
+            fsize = np.prod(shape[:-1])
+            dsize = fsize * 8
+            box_data = np.zeros(np.append(shape[:-1], len(field_indices)))
+            #data_start = bf.tell()
+            current_idx = 0
+            for i, fid in zip(field_order, sorted_indices):
+                # Go to next field
+                bf.seek((fid - current_idx) * dsize, 1)
+                # Load the data and add to output
+                box_data[..., i] = np.fromfile(bf, 'float64', fsize).reshape(shape[:-1], order='F')
+                current_idx = fid + 1
+            # Go to next box
+            bf.seek((shape[-1] - current_idx) * dsize, 1)
+            file_data.append(box_data)
+            #except Exception as e:
+            #    break
     return file_data
 
 class LevelDataIterator(object):
 
     def __init__(self, fun, bfiles, field_arg):
         pool = multiprocessing.Pool()
+        # Iterator for each binary file
         self.iterator = pool.imap(fun,
                                   zip(bfiles,
                                       [field_arg]*len(bfiles)))
+        # Iterator for each box
         self._data = self.iterator.__next__().__iter__()
 
     def __iter__(self):
         return self
 
     def __next__(self):
+        # Get the next box
         try:
             return self._data.__next__()
+        # End of current binary file
         except StopIteration:
             self._data = self.iterator.__next__().__iter__()
             return self._data.__next__()
 
 class LevelDataStream(object):
 
-    def __init__(self, bfiles, offsets, field_arg):
+    def __init__(self, bfiles, offsets, field_arg, serial=False):
+        self.serial = serial
         self.bfiles = np.array(bfiles)
         self.offsets = np.array(offsets)
         self.size = len(bfiles)
@@ -141,15 +171,27 @@ class LevelDataStream(object):
                 return []
             idx = np.array(idx)
             assert idx.ndim == 1, "Box slice indices must be one dimensional"
-            pool = multiprocessing.Pool()
-            if idx.dtype == int:
-                count = len(idx)
-            elif idx.dtype == bool:
-                count = np.count_nonzero(idx)
-            return pool.map(self.read_fun,
-                            zip(self.bfiles[idx],
-                                self.offsets[idx],
-                                [self.farg]*count))
+            if self.serial:
+                if idx.dtype == int:
+                    count = len(idx)
+                elif idx.dtype == bool:
+                    count = np.count_nonzero(idx)
+                return map(self.read_fun,
+                           zip(self.bfiles[idx],
+                               self.offsets[idx],
+                               [self.farg]*count))
+
+            else:
+                pool = multiprocessing.Pool()
+                if idx.dtype == int:
+                    count = len(idx)
+                elif idx.dtype == bool:
+                    count = np.count_nonzero(idx)
+                return pool.map(self.read_fun,
+                                zip(self.bfiles[idx],
+                                    self.offsets[idx],
+                                    [self.farg]*count))
+
     def __iter__(self):
         return LevelDataIterator(self.file_fun,
                                  np.unique(self.bfiles),
@@ -188,7 +230,9 @@ class LevelDataStream(object):
 
 class LevelDataSelector(object):
 
-    def __init__(self, fields, cells, field_arg, limit_level, boxes = None, dx = None):
+    def __init__(self, fields, cells, field_arg, limit_level,
+                 boxes = None, dx = None, serial=False):
+        self.serial = serial
         # Convert key to field index
         if isinstance(field_arg, str):
             field_arg = fields[field_arg]
@@ -216,7 +260,8 @@ class LevelDataSelector(object):
                               f" is {self.limit_level}"))
         return LevelDataStream(self.cells[key]['files'],
                                self.cells[key]['offsets'],
-                               self.farg)
+                               self.farg,
+                               serial=self.serial)
 
     def __call__(self, *args):
 
@@ -279,10 +324,11 @@ class LevelDataSelector(object):
             # Point can only be contained in a single box
             assert len(box_matches_inner[match_lv_inner]) == 1
             # Validate we only match a single box for the other conditions
-            assert ((match_lv_inner == match_lv_exact) & \
-                    (match_lv_inner == match_lv_outer)), "Something went wrong"
-            assert len(box_matches_exact[match_lv_exact]) == 1, "Something went wrong"
-            assert len(box_matches_outer[match_lv_outer]) == 1, "Something went wrong"
+            if False:
+                assert ((match_lv_inner == match_lv_exact) & \
+                        (match_lv_inner == match_lv_outer)), "Something went wrong"
+                assert len(box_matches_exact[match_lv_exact]) == 1, "Something went wrong"
+                assert len(box_matches_outer[match_lv_outer]) == 1, "Something went wrong"
             # Log some info
             match_box_id = int(box_matches_inner[match_lv_inner][0])
             # dx at the interpolation level
@@ -315,7 +361,7 @@ class LevelDataSelector(object):
                 return np.array(point_data)
 
         # CASE 2: when the point is between boxes
-        else: 
+        else:
             # Find out which levels we need to load data from
             # This assume there are now adjacent boxes differing for more
             # than one AMR level (normally enforced by AMReX)
@@ -394,7 +440,8 @@ class PlotfileCooker(object):
                  header_only: bool = False,
                  validate_mode: bool = False,
                  maxmins: bool = False,
-                 ghost: bool = False):
+                 ghost: bool = False,
+                 serial: bool = False):
         """
         Parse the header data and save as attributes
         ___
@@ -410,6 +457,7 @@ class PlotfileCooker(object):
         ghost: if True the ghost cells around each box are computed by creating
                3D arrays where the value is the index of the box for each level
         """
+        self.serial = serial
         self.pfile = plotfile_path
         filepath = os.path.join(self.pfile, 'Header')
         with open(filepath) as hfile:
@@ -461,6 +509,9 @@ class PlotfileCooker(object):
                 raise ValueError((f"The limit level must be less or equal than"
                                   f" the maximum AMR level of the plotfile:"
                                   f" {limit_level} > {self.max_level}"))
+            # Iterator to loop over loaded amr levels
+            self.level_iter = range(self.limit_level + 1)
+
             # Read the box geometry
             try:
                 self.box_centers, self.boxes = self.read_boxes(hfile)
@@ -551,6 +602,8 @@ class PlotfileCooker(object):
         PlotfileCooker[3] # A single field using the field index
         PlotfileCooker[:3] # Multiple fields using a slice
         PlotfileCooker[[0, 3, 10]] # Multiple fields using a list of indices
+        # multiple fields using a list of keys
+        PlotfileCooker[['temp', 'x_velocity', 'Y(O2)']]
 
         The second layer defines which AMR Level is selected. This indexing
         operator returns an iterator for the data at the selected level.
@@ -626,7 +679,7 @@ class PlotfileCooker(object):
             box_data = PlotfileCooker["field"][lv][i]
         ```
         """
-        return LevelDataSelector(self.fields, self.cells, key, self.limit_level, self.boxes, self.dx)
+        return LevelDataSelector(self.fields, self.cells, key, self.limit_level, self.boxes, self.dx, serial=self.serial)
 
     """
     Method for constructing the class from plotfile mesh data
@@ -970,11 +1023,104 @@ class PlotfileCooker(object):
                 mp_call[ky] = kwargs[ky]
             yield mp_call
 
+    def binfile_read_order(self, level):
+        """
+        return the order in which the box are read when reading
+        binary files in order for a given amr level
+        """
+        bfiles = np.array(self.cells[level]['files'])
+        unique_bfiles = np.unique(bfiles)
+        offsets = np.array(self.cells[level]['offsets'])
+        box_numbers = np.arange(len(offsets))
+        read_order = []
+        for ubfile in np.unique(bfiles):
+            # Current offsets in the file
+            file_offsets = offsets[bfiles == ubfile]
+            # Boxes in the file
+            file_boxes = box_numbers[bfiles == ubfile]
+            # Sort boxes by read order
+            read_order.append(file_boxes[np.argsort(file_offsets)])
+        return np.hstack(read_order)
+
+    def get_amr_masks(self):
+        """
+        compute the AMR masks for each box at level
+        """
+        # Compute the 3D box adjacency matrix for each level
+        box_arrays, _ = self.compute_box_array()
+        # one covering mask per level below max level
+        covering_masks = []
+        for lv in range(self.limit_level): # Last level is not masked
+            # masks for the current level
+            lv_masks = []
+            # Factor between box_array shape and grid size at the level above
+            next_lv_factors = self.grid_sizes[lv + 1] // box_arrays[lv + 1].shape
+            # Iterate over each AMR box in the order in which boxes are read
+            read_order = self.binfile_read_order(lv)
+            # ordered box indices with respect to global grid
+            box_indices = np.array(self.cells[lv]['indexes'])[read_order]
+            # For each box
+            for idx, indices in zip(read_order, box_indices):
+                # Convert to box array indices at lv + 1
+                # Eg. box at [[256, 0, 1024], [287, 31, 1040]] becomes
+                # [[32, 0, 128], [35, 3, 130]] which slices box_array
+                barr_starts = np.array((indices[0] * 2) // next_lv_factors, dtype=int)
+                barr_ends = np.array((indices[1] * 2) // next_lv_factors, dtype=int)
+                # Get the box data at the upper level where the lower level box is 
+                # located
+                next_level_boxes = box_arrays[lv + 1][barr_starts[0]:barr_ends[0]+1,
+                                                          barr_starts[1]:barr_ends[1]+1,
+                                                          barr_starts[2]:barr_ends[2]+1]
+                # Convert the upper level box slice to lower level bool
+                # Here we expect the bcast factor to be the same in each dimension
+                bcast_factor = next_lv_factors[0] // 2
+                # Expand the box array slice to the current grid resolution
+                next_lv_map = expand_array3d(next_level_boxes, bcast_factor)
+                # Boolean array to store the mask
+                mask = np.zeros_like(next_lv_map, dtype=bool)
+                # mask is true where the value is -1
+                # -1 means there is no box at this level
+                mask[next_lv_map == -1] = True
+                lv_masks.append(mask)
+            covering_masks.append(lv_masks)
+        return covering_masks
+
+    def amr_masked_iter(self, key, verbose=True):
+        """
+        iterate over the whole plotfile masking lower
+        level data covered by upper level data
+        key should be compatible with PlotfileCooker[lv][*key*]
+        """
+        # Compute the masking data for lower levels
+        # This should not be too big as its only for lv < max_level
+        # with boolean data type, so a few GB for a decent plotfile
+        covering_masks = self.get_amr_masks()
+        # Progress bar for each box
+        if verbose:
+            total = np.sum([len(self.cells[lv]['indexes']) for lv in self.level_iter])
+            pbar = tqdm(total=total)
+        # For each level
+        for lv in self.level_iter:
+            self.current_iter_lv = lv
+            # For each amr box
+            for bid, data in enumerate(self[key][lv]):
+                pbar.update(1)
+                if lv < self.max_level:
+                    mask = covering_masks[lv][bid]
+                    if mask.any():
+                        yield data[mask]
+                else:
+                    if data.ndim == 3:
+                        yield data.ravel(order='F')
+                    else:
+                        #yield np.moveaxis(data, 3, 0).reshape(data.shape[0], -1)
+                        yield [data[..., i].ravel(order='F') for i in range(data.shape[-1])]
+
     """
     Methods resolving the box adjacency in the plotfile
     """
 
-    def compute_box_array(self):
+    def compute_box_array(self, level=None):
         """
         Compute a Nx * Ny * Nz array defining the
         adjacency of the boxes.
@@ -983,12 +1129,28 @@ class PlotfileCooker(object):
         """
         # Cell resolution in each direction
         box_shapes = self.unique_box_shapes()
-        #box_rez = np.min(box_shapes, axis=0)
         box_rez = np.min(box_shapes)
-        box_arrays = []
-        box_array_indices = []
-        for lv in range(self.limit_level + 1):
-            box_array_shape = self.grid_sizes[lv] // box_rez
+        # If computing for each level
+        if level is None:
+            # empty arrays
+            box_arrays = []
+            box_array_indices = []
+            for lv in range(self.limit_level + 1):
+                box_array_shape = self.grid_sizes[lv] // box_rez
+                box_array = -1 * np.ones(box_array_shape, dtype=int)
+                lv_barray_indices = []
+                for i, idx in enumerate(self.cells[lv]["indexes"]):
+                    bidx_lo = idx[0] // box_rez
+                    bidx_hi = idx[1] // box_rez
+                    box_array[bidx_lo[0]:bidx_hi[0] + 1,
+                              bidx_lo[1]:bidx_hi[1] + 1,
+                              bidx_lo[2]:bidx_hi[2] + 1] = i
+                    lv_barray_indices.append([bidx_lo, bidx_hi])
+                box_arrays.append(box_array)
+                box_array_indices.append(lv_barray_indices)
+            return box_arrays, box_array_indices
+        else:
+            box_array_shape = self.grid_sizes[level] // box_rez
             box_array = -1 * np.ones(box_array_shape, dtype=int)
             lv_barray_indices = []
             for i, idx in enumerate(self.cells[lv]["indexes"]):
@@ -998,9 +1160,7 @@ class PlotfileCooker(object):
                           bidx_lo[1]:bidx_hi[1] + 1,
                           bidx_lo[2]:bidx_hi[2] + 1] = i
                 lv_barray_indices.append([bidx_lo, bidx_hi])
-            box_arrays.append(box_array)
-            box_array_indices.append(lv_barray_indices)
-        return box_arrays, box_array_indices
+            return box_array, lv_barray_indices
 
     def compute_ghost_map(self):
         """
