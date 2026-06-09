@@ -13,6 +13,7 @@ from amr_kitchen.utils import shapes_from_header_vardims
 from amr_kitchen.utils import shape_from_header
 from amr_kitchen.utils import header_from_indices
 
+
 # The prototype of this should also live somewhere as 
 # it is faster than how binary files are read in colander.py
 def mp_read_binary_data(args):
@@ -144,6 +145,11 @@ class Taster(PlotfileCooker):
             self.v = 1
         else:
             self.v = verbose
+
+        if self.v == 0:
+            self.disable_tqdm = True
+        else:
+            self.disable_tqdm = False
 
         # Assume the plotfile is good
         self.isgood = True
@@ -325,7 +331,8 @@ class Taster(PlotfileCooker):
                          'nfields':len(self.fields)}
                 mp_inputs.append(mp_in)
             for mp_out in tqdm(self.pool.imap(mp_fun_headers, mp_inputs),
-                               total=len(mp_inputs)):
+                               total=len(mp_inputs),
+                               disable=self.disable_tqdm):
                 if mp_out is not None:
                     self.raise_error(TastesBadError, mp_out)
 
