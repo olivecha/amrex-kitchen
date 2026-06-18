@@ -7,7 +7,8 @@ import numpy as np
 from humanize import naturalsize
 from amr_kitchen import PlotfileCooker
 from amr_kitchen.utils import (expand_array3d,
-                               indices_from_header)
+                               indices_from_header,
+                               dtype_from_header)
 
 def readfieldfrombinfile(args):
     """
@@ -21,15 +22,16 @@ def readfieldfrombinfile(args):
     with open(fname, 'rb') as bfile:
         while True:
             try:
-                h = bfile.readline()
-                idx = indices_from_header(h.decode("utf-8"))
+                h = bfile.readline().decode("utf-8")
+                idx = indices_from_header(h)
+                dtype, isize = dtype_from_header(h)
                 shape = idx[1] - idx[0] + 1
                 tshape = [shape[0], shape[1], shape[2], N_FIELDS]
-                bfile.seek(np.prod(shape)*FIELD_INDEX*8, 1)
-                arr = np.fromfile(bfile, 'float64', np.prod(shape))
+                bfile.seek(np.prod(shape)*FIELD_INDEX*isize, 1)
+                arr = np.fromfile(bfile, dtype, np.prod(shape))
                 arrays.append(arr.reshape(shape, order='F'))
                 indexes.append(idx)
-                remainder = np.prod(tshape)*8 - np.prod(shape)*FIELD_INDEX*8 - np.prod(shape)*8
+                remainder = np.prod(tshape)*isize - np.prod(shape)*FIELD_INDEX*isize - np.prod(shape)*isize
                 bfile.seek(remainder, 1)
             except Exception as e:
                 break

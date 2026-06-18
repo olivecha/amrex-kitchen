@@ -32,6 +32,44 @@ def expand_array3d(arr, factor):
                                factor, axis=1),
                      factor, axis=2)
 
+# AMReX FAB format descriptors for the supported floating point
+# data types. These are the exact descriptor strings AMReX writes for
+# native plotfiles. The byte size of Real is encoded by the bit width
+# at the start of the inner format tuple (64 -> float64, 32 -> float32),
+# *not* by the leading number, which can be 8 even for float32 data.
+REAL_DESCRIPTORS = {
+    8: "FAB ((8, (64 11 52 0 1 12 0 1023)),(8, (8 7 6 5 4 3 2 1)))",
+    4: "FAB ((8, (32 8 23 0 1 9 0 127)),(4, (4 3 2 1)))",
+}
+
+# Map the byte size of Real to the matching numpy dtype
+DTYPE_FROM_SIZE = {8: 'float64', 4: 'float32'}
+
+
+def dtype_from_header(h):
+    """
+    Infer the floating point data type and its byte size from the
+    FAB header in a plotfile binary file. AMReX encodes the format of
+    Real as a tuple whose first number is the total bit width, e.g.
+    "FAB ((8, (64 11 52 ..." for float64 and
+    "FAB ((8, (32 8 23 ..." for float32. Note the leading number can be
+    8 even for float32 data, so the bit width of the inner tuple is the
+    reliable field to parse.
+    h: string of the header line
+    returns: (numpy dtype string, itemsize in bytes)
+    """
+    # The inner format tuple is the third '('-delimited group, e.g.
+    # "FAB ((8, (64 11 52 ..." -> "64 11 52 ..." whose first token is
+    # the total number of bits used to store a Real.
+    nbits = int(h.split('(')[3].split()[0])
+    real_size = nbits // 8
+    if real_size not in DTYPE_FROM_SIZE:
+        raise ValueError((f"Unsupported Real bit width in FAB header: "
+                          f"{nbits} (expected 64 for float64 or 32 for"
+                          f" float32)"))
+    return DTYPE_FROM_SIZE[real_size], real_size
+
+
 def shape_from_header(h):
     """
     Infer the shape the box and the number of fields
@@ -61,15 +99,17 @@ def indices_from_header(h):
     stop = np.array(stop.replace('(', '').replace(')', '').split(','), dtype=int)
     return [start, stop]
 
-def header_from_indices(start, stop, nfields):
+def header_from_indices(start, stop, nfields, real_size=8):
     """
     Creates a binary file header from the box
     global indices and number of fields
     start: start indices
     stop: stop indices
     nfields: number of fields in the plotfile
+    real_size: byte size of Real (8 for float64, 4 for float32)
+               selects the matching FAB format descriptor
     """
-    header_const = "FAB ((8, (64 11 52 0 1 12 0 1023)),(8, (8 7 6 5 4 3 2 1)))"
+    header_const = REAL_DESCRIPTORS[real_size]
     header_indices = (f"((" + ','.join([str(s) for s in start]) + ')'
                       f" (" + ','.join([str(s) for s in stop]) + ")"
                       f" (" + ','.join(["0" for _ in stop]) + f")) {nfields}\n")

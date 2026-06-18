@@ -10,6 +10,7 @@ import cantera as ct
 from tqdm import tqdm
 from amr_kitchen import PlotfileCooker
 from amr_kitchen.utils import shape_from_header
+from amr_kitchen.utils import dtype_from_header
 
 # GLOBALS
 SARRAYS = None
@@ -34,8 +35,11 @@ def chefs_knife_single_field(args):
                 # Infer the box data shape
                 try:
                     datashape = shape_from_header(header)
+                    # Data type auto-detected from the FAB header
+                    dtype, _ = dtype_from_header(header)
                 # This raises when the line is not a header
                 except Exception as e:
+                    dtype = None
                     break
                 # Store byte position in new file
                 offsets.append(bfw.tell())
@@ -48,7 +52,7 @@ def chefs_knife_single_field(args):
                 # Write the new header
                 bfw.write(header_w.encode('ascii'))
                 # Read the data
-                arr = np.fromfile(bfr, "float64", np.prod(datashape))
+                arr = np.fromfile(bfr, dtype, np.prod(datashape))
                 arr = arr.reshape(datashape, order="F")
                 # Isolate the temperature and mass fractions
                 Y = arr[:, :, :, args['sp_start']:args['sp_end']]
@@ -72,7 +76,7 @@ def chefs_knife_single_field(args):
                 max_values = np.max(alldata, axis=(0, 1, 2))
                 mins.append(min_values)
                 maxs.append(max_values)
-                bfw.write(alldata.flatten(order="F").tobytes())
+                bfw.write(alldata.astype(dtype, copy=False).flatten(order="F").tobytes())
 
     return offsets, np.array(mins), np.array(maxs)
 
@@ -97,8 +101,11 @@ def chefs_knife_byspecies_field(args):
                 # Infer the box data shape
                 try:
                     datashape = shape_from_header(header)
+                    # Data type auto-detected from the FAB header
+                    dtype, _ = dtype_from_header(header)
                 # This raises when the line is not a header
                 except Exception as e:
+                    dtype = None
                     break
                 # Store byte position in new file
                 offsets.append(bfw.tell())
@@ -111,7 +118,7 @@ def chefs_knife_byspecies_field(args):
                 # Write the new header
                 bfw.write(header_w.encode('ascii'))
                 # Read the data
-                arr = np.fromfile(bfr, "float64", np.prod(datashape))
+                arr = np.fromfile(bfr, dtype, np.prod(datashape))
                 arr = arr.reshape(datashape, order="F")
                 # Isolate the temperature and mass fractions
                 Y = arr[:, :, :, args['sp_start']:args['sp_end']]
@@ -133,7 +140,7 @@ def chefs_knife_byspecies_field(args):
                 # compute min/maxs
                 mins.append(np.min(alldata, axis=(0, 1, 2)))
                 maxs.append(np.max(alldata, axis=(0, 1, 2)))
-                bfw.write(alldata.flatten(order="F").tobytes())
+                bfw.write(alldata.astype(dtype, copy=False).flatten(order="F").tobytes())
     return offsets, np.array([mins]), np.array([maxs])
 
 def chefs_knife_byreaction_field(args):
@@ -156,8 +163,11 @@ def chefs_knife_byreaction_field(args):
                 # Infer the box data shape
                 try:
                     datashape = shape_from_header(header)
+                    # Data type auto-detected from the FAB header
+                    dtype, _ = dtype_from_header(header)
                 # This raises when the line is not a header
                 except Exception as e:
+                    dtype = None
                     break
                 # Store byte position in new file
                 offsets.append(bfw.tell())
@@ -170,7 +180,7 @@ def chefs_knife_byreaction_field(args):
                 # Write the new header
                 bfw.write(header_w.encode('ascii'))
                 # Read the data
-                arr = np.fromfile(bfr, "float64", np.prod(datashape))
+                arr = np.fromfile(bfr, dtype, np.prod(datashape))
                 arr = arr.reshape(datashape, order="F")
                 # Isolate the temperature and mass fractions
                 Y = arr[:, :, :, args['sp_start']:args['sp_end']]
@@ -191,7 +201,7 @@ def chefs_knife_byreaction_field(args):
                 alldata = np.concatenate([olddata, newdata], axis=3)
                 mins.append(np.min(alldata, axis=(0, 1, 2)))
                 maxs.append(np.max(alldata, axis=(0, 1, 2)))
-                bfw.write(alldata.flatten(order="F").tobytes())
+                bfw.write(alldata.astype(dtype, copy=False).flatten(order="F").tobytes())
     return offsets, np.array(mins), np.array(maxs)
 
 def chefs_knife_user_sarray(args):
@@ -213,15 +223,18 @@ def chefs_knife_user_sarray(args):
                 # Infer the box data shape
                 try:
                     datashape = shape_from_header(header)
+                    # Data type auto-detected from the FAB header
+                    dtype, _ = dtype_from_header(header)
                 # This raises when the line is not a header
                 except Exception as e:
+                    dtype = None
                     break
                 # Store byte position in new file
                 offsets.append(bfw.tell())
                 # shape of the box
                 boxshape = tuple([datashape[i] for i in range(3)])
                 # Read the data
-                arr = np.fromfile(bfr, "float64", np.prod(datashape))
+                arr = np.fromfile(bfr, dtype, np.prod(datashape))
                 arr = arr.reshape(datashape, order="F")
                 # Isolate the temperature and mass fractions
                 Y = arr[:, :, :, args['sp_start']:args['sp_end']]
@@ -271,7 +284,7 @@ def chefs_knife_user_sarray(args):
                 max_values = np.max(alldata, axis=(0, 1, 2))
                 mins.append(min_values)
                 maxs.append(max_values)
-                bfw.write(alldata.flatten(order="F").tobytes())
+                bfw.write(alldata.astype(dtype, copy=False).flatten(order="F").tobytes())
 
     return offsets, np.array(mins), np.array(maxs)
 
@@ -296,15 +309,18 @@ def chefs_knife_user_pfile(args):
                 # Infer the box data shape
                 try:
                     datashape = shape_from_header(header)
+                    # Data type auto-detected from the FAB header
+                    dtype, _ = dtype_from_header(header)
                 # This raises when the line is not a header
                 except Exception as e:
+                    dtype = None
                     break
                 # Store byte position in new file
                 offsets.append(bfw.tell())
                 # shape of the box
                 boxshape = tuple([datashape[i] for i in range(3)])
                 # Read the data
-                arr = np.fromfile(bfr, "float64", np.prod(datashape))
+                arr = np.fromfile(bfr, dtype, np.prod(datashape))
                 arr = arr.reshape(datashape, order="F")
                 # Pass the box indices in args['field_indexes']
                 starts, stops = header.split('(')[-3:-1]
@@ -344,7 +360,7 @@ def chefs_knife_user_pfile(args):
                 max_values[np.isnan(max_values)] = 1.7976931348623157e+308
                 mins.append(min_values)
                 maxs.append(max_values)
-                bfw.write(alldata.flatten(order="F").tobytes())
+                bfw.write(alldata.astype(dtype, copy=False).flatten(order="F").tobytes())
     return offsets, np.array(mins), np.array(maxs)
 
 class Chef(PlotfileCooker):

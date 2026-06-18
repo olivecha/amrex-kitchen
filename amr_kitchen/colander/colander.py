@@ -3,6 +3,7 @@ import time
 import multiprocessing
 import numpy as np
 from amr_kitchen import PlotfileCooker
+from amr_kitchen.utils import dtype_from_header
 
 def parallel_strain_3d(args):
     """
@@ -25,6 +26,8 @@ def parallel_strain_3d(args):
             bfr.seek(fst_r)
             # Get the header
             header = bfr.readline().decode('ascii')
+            # Data type auto-detected from the FAB header
+            dtype, _ = dtype_from_header(header)
             # Replace with number of vars just to be sure
             header_w = header.replace(f'{args["nvars"]}\n', f'{nkept}\n')
             # Write to binary file
@@ -32,7 +35,7 @@ def parallel_strain_3d(args):
              # Read the data
             shape = indexes[1] - indexes[0] + 1
             total_shape = (shape[0], shape[1], shape[2], args['nvars'])
-            arr = np.fromfile(bfr, "float64", np.prod(total_shape))
+            arr = np.fromfile(bfr, dtype, np.prod(total_shape))
             arr = arr.reshape(total_shape, order="F")
             # Reshape into dicts
             arr_out = arr[:, :, :, args["kept_fields"]]
@@ -62,6 +65,8 @@ def parallel_strain_2d(args):
             bfr.seek(fst_r)
             # Get the header
             header = bfr.readline().decode('ascii')
+            # Data type auto-detected from the FAB header
+            dtype, _ = dtype_from_header(header)
             # Replace with number of vars just to be sure
             header_w = header.replace(f'{args["nvars"]}\n', f'{nkept}\n')
             # Write to binary file
@@ -69,7 +74,7 @@ def parallel_strain_2d(args):
              # Read the data
             shape = indexes[1] - indexes[0] + 1
             total_shape = (shape[0], shape[1], args['nvars'])
-            arr = np.fromfile(bfr, "float64", np.prod(total_shape))
+            arr = np.fromfile(bfr, dtype, np.prod(total_shape))
             arr = arr.reshape(total_shape, order="F")
             # Reshape into dicts
             arr_out = arr[:, :, args["kept_fields"]]

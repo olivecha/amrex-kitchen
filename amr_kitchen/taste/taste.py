@@ -11,6 +11,7 @@ from amr_kitchen.utils import TastesBadError
 from amr_kitchen.utils import indexes_and_shape_from_header
 from amr_kitchen.utils import shapes_from_header_vardims
 from amr_kitchen.utils import shape_from_header
+from amr_kitchen.utils import dtype_from_header
 from amr_kitchen.utils import header_from_indices
 
 
@@ -29,7 +30,8 @@ def mp_read_binary_data(args):
             try:
                 h = bfile.readline().decode('ascii')
                 shape = shape_from_header(h)
-                arr = np.fromfile(bfile, 'float64', np.prod(shape))
+                dtype, _ = dtype_from_header(h)
+                arr = np.fromfile(bfile, dtype, np.prod(shape))
                 arr = arr.reshape(shape, order='F')
                 bfile_data.append(arr)
             except Exception as e:
@@ -79,9 +81,12 @@ def mp_fun_shape(args):
         for i, bid in enumerate(args['box_ids'][:-1]):
             # We can assume the header has the right shape
             # as it was validated before
-            shape = shape_from_header(h.decode('ascii'))
-            # 8 bytes per float64
-            nbytes = np.prod(shape)*8
+            hdec = h.decode('ascii')
+            shape = shape_from_header(hdec)
+            # Byte size of Real auto-detected from the FAB header
+            # (8 for float64, 4 for float32)
+            _, isize = dtype_from_header(hdec)
+            nbytes = np.prod(shape)*isize
             # Skip to the next header
             bf.seek(nbytes, 1)
             # Indices of the next header
@@ -89,7 +94,8 @@ def mp_fun_shape(args):
             # Byte string of the next header
             exp_header = header_from_indices(exp_indices[0],
                                              exp_indices[1],
-                                             args['nfields'])
+                                             args['nfields'],
+                                             real_size=isize)
             h = bf.readline()
             if h != exp_header:
                 error = (f"The binary data for box {bid}"
@@ -100,8 +106,10 @@ def mp_fun_shape(args):
                          f" {args['bfile']}")
                 return error
         # Special case for the last box
-        shape = shape_from_header(h.decode('ascii'))
-        nbytes = np.prod(shape)*8
+        hdec = h.decode('ascii')
+        shape = shape_from_header(hdec)
+        _, isize = dtype_from_header(hdec)
+        nbytes = np.prod(shape)*isize
         # Go to the last byte and store the position
         bf.seek(nbytes, 1)
         file_size = bf.tell()

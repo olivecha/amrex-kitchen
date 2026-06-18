@@ -1,5 +1,6 @@
 import numpy as np
 from .utils import expand_array
+from amr_kitchen.utils import dtype_from_header
 
 
 def slice_box(args):
@@ -71,14 +72,15 @@ def slice_box(args):
             try:
                 # Go to the cell start
                 f.seek(offset)
-                # Skip the header
+                # Skip the header (and detect the data type)
                 header = f.readline()
+                dtype, isize = dtype_from_header(header.decode('ascii'))
                 # Go to the field we want
-                f.seek(byte_size*8*fidx, 1)
+                f.seek(byte_size*isize*fidx, 1)
                 # Could be optimized by reading contiguous fields
                 # At once especially if all the data is requested
                 # Read the data
-                arr = np.fromfile(f, "float64", byte_size)
+                arr = np.fromfile(f, dtype, byte_size)
                 # Fortran order perhaps a legacy of the early AMReX
                 # versions
                 arr = arr.reshape(shape, order="F")
@@ -226,14 +228,15 @@ def plate_box(args):
             try:
                 # Go to the cell start
                 f.seek(offset)
-                # Skip the header
+                # Skip the header (and detect the data type)
                 header = f.readline()
+                dtype, isize = dtype_from_header(header.decode('ascii'))
                 # Go to the field we want
-                f.seek(byte_size*8*fidx, 1)
+                f.seek(byte_size*isize*fidx, 1)
                 # Could be optimized by reading contiguous fields
                 # At once especially if all the data is requested
                 # Read the data
-                arr = np.fromfile(f, "float64", byte_size)
+                arr = np.fromfile(f, dtype, byte_size)
                 # Fortran order perhaps a legacy of the early AMReX
                 # versions
                 arr = arr.reshape(shape, order="F")

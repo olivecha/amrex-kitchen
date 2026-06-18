@@ -4,7 +4,7 @@ from tqdm import tqdm
 from multiprocessing import Pool
 import numpy as np
 from amr_kitchen import PlotfileCooker
-from amr_kitchen.utils import shape_from_header, header_from_indices
+from amr_kitchen.utils import shape_from_header, dtype_from_header, header_from_indices
 from .checkpoint_reader import CheckpointReader
 
 
@@ -45,10 +45,14 @@ def write_plt_bin_from_chk(args):
             bid = 0
             while True:
                 try:
-                    state_shape = shape_from_header(bs.readline().decode('ascii'))
+                    state_header = bs.readline().decode('ascii')
+                    state_shape = shape_from_header(state_header)
                 except:
                     break
-                data = np.fromfile(bs, 'float64', np.prod(state_shape))
+                # Data type auto-detected from the FAB header. All the
+                # checkpoint binaries are assumed to share the same dtype.
+                dtype, real_size = dtype_from_header(state_header)
+                data = np.fromfile(bs, dtype, np.prod(state_shape))
                 # Remove ghosts cells
                 box_indices = idxs_state[bid]
                 box_shape = box_indices[1] - box_indices[0] + 1
@@ -68,7 +72,7 @@ def write_plt_bin_from_chk(args):
                     with open(b_gradp[bid], 'rb') as bg:
                         bg.seek(offsets_gradp[bid])
                         shape_gradp = shape_from_header(bg.readline().decode('ascii'))
-                        data_gradp = np.fromfile(bg, 'float64', np.prod(shape_gradp))
+                        data_gradp = np.fromfile(bg, dtype, np.prod(shape_gradp))
                     data_gradp = data_gradp.reshape(shape_gradp, order='F')
                     data = np.concatenate([data, data_gradp], axis=-1)
                 # Read species reaction rate data
@@ -76,12 +80,13 @@ def write_plt_bin_from_chk(args):
                     with open(b_I_R[bid], 'rb') as br:
                         br.seek(offsets_I_R[bid])
                         shape_I_R = shape_from_header(br.readline().decode('ascii'))
-                        data_I_R = np.fromfile(br, 'float64', np.prod(shape_I_R))
+                        data_I_R = np.fromfile(br, dtype, np.prod(shape_I_R))
                     data = np.concatenate([data, data_I_R], axis=-1)
 
                 hw = header_from_indices(box_indices[0],
                                          box_indices[1],
-                                         data.shape[-1])
+                                         data.shape[-1],
+                                         real_size=real_size)
                 offsets_plt.append(bp.tell())
                 mins_plt.append(np.min(data, axis=(0, 1, 2)))
                 maxs_plt.append(np.max(data, axis=(0, 1, 2)))

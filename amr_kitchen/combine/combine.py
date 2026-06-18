@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from amr_kitchen import PlotfileCooker
 from amr_kitchen.utils import (shape_from_header,
+                               dtype_from_header,
                                indices_from_header,
                                header_from_indices,)
 
@@ -25,6 +26,9 @@ def parallel_combine_by_binfile(args):
                         h1 = bf1.readline()
                         h1 = h1.decode('ascii')
                         shape1 = shape_from_header(h1)
+                        # Data type auto-detected from the FAB header.
+                        # Both plotfiles are assumed to share the same dtype.
+                        dtype, real_size = dtype_from_header(h1)
                         idx1 = indices_from_header(h1)
                         # For both plotfiles
                         h2 = bf2.readline()
@@ -36,14 +40,15 @@ def parallel_combine_by_binfile(args):
                     # Define the write binary header
                     hw = header_from_indices(idx1[0],
                            idx1[1],
-                           len(args['vidxs1']) + len(args['vidxs2']))
+                           len(args['vidxs1']) + len(args['vidxs2']),
+                           real_size=real_size)
                     # save the current offset
                     offsets.append(bfw.tell())
                     # Write the header and data
                     bfw.write(hw)
-                    data1 = np.fromfile(bf1, 'float64', np.prod(shape1))
+                    data1 = np.fromfile(bf1, dtype, np.prod(shape1))
                     data1 = data1.reshape(shape1, order='F')[..., args['vidxs1']]
-                    data2 = np.fromfile(bf2, 'float64', np.prod(shape2))
+                    data2 = np.fromfile(bf2, dtype, np.prod(shape2))
                     data2 = data2.reshape(shape2, order='F')[..., args['vidxs2']]
                     dataw = np.concatenate([data1.flatten(order='F'),
                                             data2.flatten(order='F')])
@@ -70,6 +75,9 @@ def parallel_combine_by_binfile_offsets(args):
                     h1 = bf1.readline()
                     h1 = h1.decode('ascii')
                     shape1 = shape_from_header(h1)
+                    # Data type auto-detected from the FAB header.
+                    # Both plotfiles are assumed to share the same dtype.
+                    dtype, real_size = dtype_from_header(h1)
                     idx1 = indices_from_header(h1)
                     # For both plotfiles
                     h2 = bf2.readline()
@@ -79,14 +87,15 @@ def parallel_combine_by_binfile_offsets(args):
                     # Define the write binary header
                     hw = header_from_indices(idx1[0],
                            idx1[1],
-                           len(args['vidxs1']) + len(args['vidxs2']))
+                           len(args['vidxs1']) + len(args['vidxs2']),
+                           real_size=real_size)
                     # save the current offset
                     offsets.append(bfw.tell())
                     # Write the header and data
                     bfw.write(hw)
-                    data1 = np.fromfile(bf1, 'float64', np.prod(shape1))
+                    data1 = np.fromfile(bf1, dtype, np.prod(shape1))
                     data1 = data1.reshape(shape1, order='F')[..., args['vidxs1']]
-                    data2 = np.fromfile(bf2, 'float64', np.prod(shape2))
+                    data2 = np.fromfile(bf2, dtype, np.prod(shape2))
                     data2 = data2.reshape(shape2, order='F')[..., args['vidxs2']]
                     dataw = np.concatenate([data1.flatten(order='F'),
                                             data2.flatten(order='F')])
@@ -109,13 +118,17 @@ def parallel_combine_by_boxes_offsets(args):
                 h1 = bf1.readline()
                 h1 = h1.decode('ascii')
                 shape1 = shape_from_header(h1)
-                data1 = np.fromfile(bf1, 'float64', np.prod(shape1))
+                # Data type auto-detected from the FAB header.
+                # Both plotfiles are assumed to share the same dtype.
+                dtype, real_size = dtype_from_header(h1)
+                data1 = np.fromfile(bf1, dtype, np.prod(shape1))
                 data1 = data1.reshape(shape1, order='F')[..., args['vidxs1']]
                 idx1 = indices_from_header(h1)
                 # Define the write binary header
                 hw = header_from_indices(idx1[0],
                        idx1[1],
-                       len(args['vidxs1']) + len(args['vidxs2']))
+                       len(args['vidxs1']) + len(args['vidxs2']),
+                       real_size=real_size)
                 # save the current offset
                 offsets.append(bfw.tell())
                 # Write the header
@@ -127,7 +140,7 @@ def parallel_combine_by_boxes_offsets(args):
                     h2 = h2.decode('ascii')
                     shape2 = shape_from_header(h2)
                     idx2 = indices_from_header(h2)
-                    data2 = np.fromfile(bf2, 'float64', np.prod(shape2))
+                    data2 = np.fromfile(bf2, dtype, np.prod(shape2))
                 data2 = data2.reshape(shape2, order='F')[..., args['vidxs2']]
                 # Write the header and data
                 dataw = np.concatenate([data1.flatten(order='F'),

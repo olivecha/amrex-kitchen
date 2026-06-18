@@ -5,26 +5,34 @@ import multiprocessing
 import numpy as np
 from tqdm import tqdm
 from scipy.ndimage import map_coordinates, zoom
-from amr_kitchen.utils import TastesBadError, shape_from_header, expand_array3d
+from amr_kitchen.utils import (TastesBadError, shape_from_header,
+                               dtype_from_header, expand_array3d)
 
+# Default data type, kept for backward compatibility. The actual data
+# type used to read each box is auto-detected from its FAB header by
+# dtype_from_header, so float32 and float64 plotfiles are both supported.
 DTYPE='float64'
 
 def mp_read_box_single_field(args):
     with open(args[0], 'rb') as bf:
         bf.seek(args[1])
-        shape = shape_from_header(bf.readline().decode('ascii'))
-        bf.seek(np.prod(shape[:-1]) * args[2] * 8, 1)
-        data = np.fromfile(bf, DTYPE, np.prod(shape[:-1]))
+        header = bf.readline().decode('ascii')
+        shape = shape_from_header(header)
+        dtype, isize = dtype_from_header(header)
+        bf.seek(np.prod(shape[:-1]) * args[2] * isize, 1)
+        data = np.fromfile(bf, dtype, np.prod(shape[:-1]))
     return data.reshape(shape[:-1], order='F')
 
 def mp_read_box_slice_field(args):
     with open(args[0], 'rb') as bf:
         bf.seek(args[1])
-        shape = shape_from_header(bf.readline().decode('ascii'))
+        header = bf.readline().decode('ascii')
+        shape = shape_from_header(header)
+        dtype, isize = dtype_from_header(header)
         start, stop = args[2].indices(shape[-1])[:2]
         slice_size = stop - start
-        bf.seek(np.prod(shape[:-1]) * start * 8, 1)
-        data = np.fromfile(bf, DTYPE, np.prod(shape[:-1]) * slice_size)
+        bf.seek(np.prod(shape[:-1]) * start * isize, 1)
+        data = np.fromfile(bf, dtype, np.prod(shape[:-1]) * slice_size)
     data = data.reshape(np.append(shape[:-1], slice_size), order='F')
     return data[..., args[2]]
 
@@ -32,9 +40,11 @@ def mp_read_box_index_field(args):
     diff = args[2][-1] - args[2][0] + 1
     with open(args[0], 'rb') as bf:
         bf.seek(args[1])
-        shape = shape_from_header(bf.readline().decode('ascii'))
-        bf.seek(np.prod(shape[:-1]) * args[2][0] * 8, 1)
-        data = np.fromfile(bf, DTYPE, np.prod(shape[:-1])*diff)
+        header = bf.readline().decode('ascii')
+        shape = shape_from_header(header)
+        dtype, isize = dtype_from_header(header)
+        bf.seek(np.prod(shape[:-1]) * args[2][0] * isize, 1)
+        data = np.fromfile(bf, dtype, np.prod(shape[:-1])*diff)
     data = data.reshape(np.append(shape[:-1], diff), order='F')
     return data[..., np.array(args[2]) - args[2][0]]
 
@@ -43,10 +53,12 @@ def mp_read_bfile_single_field(args):
     with open(args[0], 'rb') as bf:
         while True:
             try:
-                shape = shape_from_header(bf.readline().decode('ascii'))
-                bf.seek(np.prod(shape[:-1]) * args[1] * 8, 1)
-                data = np.fromfile(bf, DTYPE, np.prod(shape[:-1]))
-                bf.seek(np.prod(shape[:-1]) * (shape[-1] - args[1] - 1) * 8, 1)
+                header = bf.readline().decode('ascii')
+                shape = shape_from_header(header)
+                dtype, isize = dtype_from_header(header)
+                bf.seek(np.prod(shape[:-1]) * args[1] * isize, 1)
+                data = np.fromfile(bf, dtype, np.prod(shape[:-1]))
+                bf.seek(np.prod(shape[:-1]) * (shape[-1] - args[1] - 1) * isize, 1)
                 file_data.append(data.reshape(shape[:-1], order='F'))
             except:
                 break
@@ -57,12 +69,14 @@ def mp_read_bfile_slice_field(args):
     with open(args[0], 'rb') as bf:
         while True:
             try:
-                shape = shape_from_header(bf.readline().decode('ascii'))
+                header = bf.readline().decode('ascii')
+                shape = shape_from_header(header)
+                dtype, isize = dtype_from_header(header)
                 start, stop = args[1].indices(shape[-1])[:2]
                 slice_size = stop - start
-                bf.seek(np.prod(shape[:-1]) * start * 8, 1)
-                data = np.fromfile(bf, DTYPE, np.prod(shape[:-1]) * slice_size)
-                bf.seek(np.prod(shape[:-1]) * (shape[-1] - slice_size - start) * 8, 1)
+                bf.seek(np.prod(shape[:-1]) * start * isize, 1)
+                data = np.fromfile(bf, dtype, np.prod(shape[:-1]) * slice_size)
+                bf.seek(np.prod(shape[:-1]) * (shape[-1] - slice_size - start) * isize, 1)
                 data = data.reshape(np.append(shape[:-1], slice_size), order='F')
                 file_data.append(data[..., args[1]])
             except Exception as e:
@@ -92,9 +106,11 @@ def mp_read_bfile_index_field(args):
             hdr = bf.readline()
             if not hdr:
                 break
-            shape = shape_from_header(hdr.decode('ascii'))
+            header = hdr.decode('ascii')
+            shape = shape_from_header(header)
+            dtype, isize = dtype_from_header(header)
             fsize = np.prod(shape[:-1])
-            dsize = fsize * 8
+            dsize = fsize * isize
             box_data = np.zeros(np.append(shape[:-1], len(field_indices)))
             #data_start = bf.tell()
             current_idx = 0
@@ -102,7 +118,7 @@ def mp_read_bfile_index_field(args):
                 # Go to next field
                 bf.seek((fid - current_idx) * dsize, 1)
                 # Load the data and add to output
-                box_data[..., i] = np.fromfile(bf, DTYPE, fsize).reshape(shape[:-1], order='F')
+                box_data[..., i] = np.fromfile(bf, dtype, fsize).reshape(shape[:-1], order='F')
                 current_idx = fid + 1
             # Go to next box
             bf.seek((shape[-1] - current_idx) * dsize, 1)
@@ -443,8 +459,7 @@ class PlotfileCooker(object):
                  validate_mode: bool = False,
                  maxmins: bool = False,
                  ghost: bool = False,
-                 serial: bool = False,
-                 dtype: str = None):
+                 serial: bool = False):
         """
         Parse the header data and save as attributes
         ___
@@ -460,10 +475,9 @@ class PlotfileCooker(object):
         ghost: if True the ghost cells around each box are computed by creating
                3D arrays where the value is the index of the box for each level
         """
-        # Set the data type to read files
-        global DTYPE
-        if dtype is not None:
-            DTYPE=dtype
+        # The data type of each box is auto-detected from its FAB
+        # header when reading (see dtype_from_header), so float32 and
+        # float64 plotfiles are both supported transparently.
         self.serial = serial
         self.pfile = plotfile_path
         filepath = os.path.join(self.pfile, 'Header')

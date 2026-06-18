@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from amr_kitchen.utils import shape_from_header
+from amr_kitchen.utils import shape_from_header, dtype_from_header
 
 
 class CheckpointReader(object):
@@ -176,8 +176,10 @@ class CheckpointReader(object):
         box_file_path = os.path.join(self.chkdir, f'Level_{lv}', box_file)
         with open(box_file_path, 'rb') as bfile:
             bfile.seek(self.boxes[lv][f'{prefix}_offsets'][bid])
-            shape = shape_from_header(bfile.readline().decode('ascii'))
-            data = np.fromfile(bfile, 'float64', np.prod(shape))
+            header = bfile.readline().decode('ascii')
+            shape = shape_from_header(header)
+            dtype, _ = dtype_from_header(header)
+            data = np.fromfile(bfile, dtype, np.prod(shape))
         # Remove ghosts cells
         if self.data_has_ghost[prefix]:
             box_indices = self.boxes[lv]['indices'][bid]
