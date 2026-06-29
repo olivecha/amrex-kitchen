@@ -13,6 +13,37 @@ from amr_kitchen.utils import (TastesBadError, shape_from_header,
 # dtype_from_header, so float32 and float64 plotfiles are both supported.
 DTYPE='float64'
 
+# Named grid coordinates exposed as virtual fields. They map to the
+# 0th (x), 1st (y) and 2nd (z) axes of the box data arrays (Fortran
+# order). When indexing fields by integer instead of by name these are
+# the three "fields" following the data fields, i.e. virtual indices
+# nfields, nfields + 1 and nfields + 2.
+COORD_NAMES = {'x': 0, 'y': 1, 'z': 2}
+
+def coord_box_data(grids_lv, indices, axis):
+    """
+    Compute the full tiled 3D (or 2D) array of a grid coordinate
+    ('x', 'y' or 'z') for a single AMR box.
+    ___
+    grids_lv: list of the 1D coordinate arrays for the level
+              (one per dimension), as in PlotfileCooker.grids[lv]
+    indices: [start, stop] global cell indices of the box (inclusive),
+             as in PlotfileCooker.cells[lv]['indexes'][bid]
+    axis: 0 for x, 1 for y, 2 for z
+
+    The array is materialized (writable and contiguous) so it behaves
+    like the box field data and supports masking. The value at index
+    (i, j, k) is the coordinate of the cell center along :axis:, matching
+    PlotfileCooker.box_points.
+    """
+    lo, hi = indices[0], indices[1]
+    shape = tuple(int(hi[d] - lo[d] + 1) for d in range(len(lo)))
+    loc = grids_lv[axis][lo[axis]:hi[axis] + 1]
+    # Reshape the 1D coordinate so it broadcasts along its own axis only
+    reshaper = [1] * len(shape)
+    reshaper[axis] = -1
+    return np.broadcast_to(loc.reshape(reshaper), shape).copy()
+
 def mp_read_box_single_field(args):
     with open(args[0], 'rb') as bf:
         bf.seek(args[1])
@@ -37,16 +68,22 @@ def mp_read_box_slice_field(args):
     return data[..., args[2]]
 
 def mp_read_box_index_field(args):
-    diff = args[2][-1] - args[2][0] + 1
+    # Field indices may be in any order (e.g. [5, 3]), so read the
+    # contiguous span between the smallest and largest requested index
+    # and then select the fields back in the requested order.
+    field_indices = np.array(args[2])
+    fid_min = field_indices.min()
+    fid_max = field_indices.max()
+    diff = fid_max - fid_min + 1
     with open(args[0], 'rb') as bf:
         bf.seek(args[1])
         header = bf.readline().decode('ascii')
         shape = shape_from_header(header)
         dtype, isize = dtype_from_header(header)
-        bf.seek(np.prod(shape[:-1]) * args[2][0] * isize, 1)
+        bf.seek(np.prod(shape[:-1]) * fid_min * isize, 1)
         data = np.fromfile(bf, dtype, np.prod(shape[:-1])*diff)
     data = data.reshape(np.append(shape[:-1], diff), order='F')
-    return data[..., np.array(args[2]) - args[2][0]]
+    return data[..., field_indices - fid_min]
 
 def mp_read_bfile_single_field(args):
     file_data = []
@@ -152,13 +189,24 @@ class LevelDataIterator(object):
 
 class LevelDataStream(object):
 
-    def __init__(self, bfiles, offsets, field_arg, serial=False):
+    def __init__(self, bfiles, offsets, field_arg, columns=None, scalar=False,
+                 grids_lv=None, indexes_lv=None, serial=False):
         self.serial = serial
         self.bfiles = np.array(bfiles)
         self.offsets = np.array(offsets)
         self.size = len(bfiles)
         self.farg = field_arg
-        if isinstance(self.farg, int):
+        # Coordinate-aware attributes. When columns is None this stream
+        # behaves exactly like before (no coordinate fields requested).
+        self.columns = columns
+        self.scalar = scalar
+        self.grids_lv = grids_lv
+        self.indexes_lv = indexes_lv
+        if self.farg is None:
+            # Coordinate-only request: no binary data is read
+            self.read_fun = None
+            self.file_fun = None
+        elif isinstance(self.farg, int):
             self.read_fun = mp_read_box_single_field
             self.file_fun = mp_read_bfile_single_field
         elif isinstance(self.farg, slice):
@@ -171,7 +219,101 @@ class LevelDataStream(object):
             self.read_fun = mp_read_box_index_field
             self.file_fun = mp_read_bfile_index_field
 
+    def _read_order(self):
+        """
+        Box indices in the order they are read when iterating over the
+        binary files. This must match PlotfileCooker.binfile_read_order
+        (and get_amr_masks) so coordinate data aligns with the masks used
+        by amr_masked_iter.
+        """
+        box_numbers = np.arange(self.size)
+        read_order = []
+        for ubf in np.unique(self.bfiles):
+            in_file = self.bfiles == ubf
+            file_boxes = box_numbers[in_file]
+            file_offsets = self.offsets[in_file]
+            read_order.append(file_boxes[np.argsort(file_offsets)])
+        return np.hstack(read_order)
+
+    def _assemble_box(self, data, bid):
+        """
+        Combine the field data array :data: (or None for coordinate-only
+        requests) read for box :bid: with the requested coordinate arrays,
+        following the column plan order.
+        """
+        indices = self.indexes_lv[bid]
+        # A single coordinate field is returned as a bare 3D array
+        if self.scalar:
+            _, axis = self.columns[0]
+            return coord_box_data(self.grids_lv, indices, axis)
+        cols = []
+        data_idx = 0
+        for kind, val in self.columns:
+            if kind == 'field':
+                cols.append(data[..., data_idx])
+                data_idx += 1
+            else:
+                cols.append(coord_box_data(self.grids_lv, indices, val))
+        return np.stack(cols, axis=-1)
+
+    def _read_batch(self, idx, count):
+        """ Read the field data for a selection of boxes (no coordinates) """
+        args = zip(self.bfiles[idx], self.offsets[idx], [self.farg] * count)
+        if self.serial:
+            return list(map(self.read_fun, args))
+        pool = multiprocessing.Pool()
+        return pool.map(self.read_fun, args)
+
+    def _getitem_coords(self, idx):
+        if isinstance(idx, (int, np.integer)):
+            data = None
+            if self.farg is not None:
+                data = self.read_fun((self.bfiles[idx],
+                                      self.offsets[idx],
+                                      self.farg))
+            return self._assemble_box(data, idx)
+        elif isinstance(idx, slice):
+            box_ids = list(range(*idx.indices(self.size)))
+            count = len(box_ids)
+            if self.farg is not None:
+                data_list = self._read_batch(idx, count)
+            else:
+                data_list = [None] * count
+            return [self._assemble_box(d, b)
+                    for d, b in zip(data_list, box_ids)]
+        elif (isinstance(idx, list) or
+              isinstance(idx, np.ndarray)):
+            idx = np.array(idx)
+            if len(idx) == 0:
+                return []
+            assert idx.ndim == 1, "Box slice indices must be one dimensional"
+            if idx.dtype == bool:
+                box_ids = np.flatnonzero(idx)
+            else:
+                box_ids = idx
+            count = len(box_ids)
+            if self.farg is not None:
+                data_list = self._read_batch(idx, count)
+            else:
+                data_list = [None] * count
+            return [self._assemble_box(d, int(b))
+                    for d, b in zip(data_list, box_ids)]
+
+    def _iter_coords(self):
+        read_order = self._read_order()
+        if self.farg is None:
+            for bid in read_order:
+                yield self._assemble_box(None, int(bid))
+        else:
+            data_iter = LevelDataIterator(self.file_fun,
+                                          np.unique(self.bfiles),
+                                          self.farg)
+            for bid, data in zip(read_order, data_iter):
+                yield self._assemble_box(data, int(bid))
+
     def __getitem__(self, idx):
+        if self.columns is not None:
+            return self._getitem_coords(idx)
         if isinstance(idx, int):
             return self.read_fun((self.bfiles[idx],
                                   self.offsets[idx],
@@ -211,6 +353,8 @@ class LevelDataStream(object):
                                     [self.farg]*count))
 
     def __iter__(self):
+        if self.columns is not None:
+            return self._iter_coords()
         return LevelDataIterator(self.file_fun,
                                  np.unique(self.bfiles),
                                  self.farg)
@@ -219,6 +363,10 @@ class LevelDataStream(object):
         Manual data iterator to support reading data
         on the fly for slices
         """
+        if self.columns is not None:
+            raise NotImplementedError(("The on-the-fly .iter() data iterator"
+                                       " does not support coordinate fields"
+                                       " ('x', 'y', 'z')"))
         if isinstance(idx, int):
             return self.read_fun((self.bfiles[idx],
                                   self.offsets[idx],
@@ -249,36 +397,121 @@ class LevelDataStream(object):
 class LevelDataSelector(object):
 
     def __init__(self, fields, cells, field_arg, limit_level,
-                 boxes = None, dx = None, serial=False):
+                 boxes = None, dx = None, grids = None, serial=False):
         self.serial = serial
-        # Convert key to field index
-        if isinstance(field_arg, str):
-            field_arg = fields[field_arg]
-        # Also for tuples of keys
-        elif ((isinstance(field_arg, list) or
-               isinstance(field_arg, np.ndarray)) and
-               isinstance(field_arg[0], str)):
-            field_arg = [fields[fname] for fname in field_arg]
-        try:
-            _ = np.array(list(fields.keys()))[field_arg]
-            self.farg = field_arg
-        except IndexError:
-            raise IndexError((f"The field indexing [{field_arg}] is not"
-                              f" compatible with the number of fields"
-                              f" in the plotfile ({len(fields)})"))
         self.cells = cells
         self.fields = fields
         self.limit_level = limit_level
         self.boxes = boxes
         self.dx = dx
+        self.grids = grids
+        self.nfields = len(fields)
+        # Number of spatial dimensions (used to validate coordinate fields)
+        self.ndims = len(dx[0]) if dx is not None else 3
+        # Was the key a single (scalar) field/coordinate selection? In that
+        # case the data of a single field/coordinate is returned as a bare
+        # 3D array instead of an array with a trailing field axis.
+        self.scalar = isinstance(field_arg, (str, int, np.integer))
+
+        # Build the column plan if the key references grid coordinates
+        # ('x', 'y', 'z'), otherwise keep the original optimized behavior.
+        self.columns = self._parse_coord_columns(field_arg)
+        if self.columns is None:
+            # Convert key to field index
+            if isinstance(field_arg, str):
+                field_arg = fields[field_arg]
+            # Also for tuples of keys
+            elif ((isinstance(field_arg, list) or
+                   isinstance(field_arg, np.ndarray)) and
+                   isinstance(field_arg[0], str)):
+                field_arg = [fields[fname] for fname in field_arg]
+            try:
+                _ = np.array(list(fields.keys()))[field_arg]
+                self.farg = field_arg
+            except IndexError:
+                raise IndexError((f"The field indexing [{field_arg}] is not"
+                                  f" compatible with the number of fields"
+                                  f" in the plotfile ({len(fields)})"))
+        else:
+            # Field data argument: only the real fields, kept in column
+            # order. Coordinate-only requests read no binary data (None).
+            data_indices = [val for kind, val in self.columns
+                            if kind == 'field']
+            self.farg = data_indices if len(data_indices) > 0 else None
+
+    def _check_axis(self, axis, name):
+        if axis >= self.ndims:
+            raise IndexError((f"Coordinate '{name}' is not available for a"
+                              f" {self.ndims}D plotfile"))
+
+    def _token_to_column(self, tok):
+        """ Map a single field key (name or index) to a column spec """
+        if isinstance(tok, str):
+            if tok in COORD_NAMES:
+                axis = COORD_NAMES[tok]
+                self._check_axis(axis, tok)
+                return ('coord', axis)
+            if tok not in self.fields:
+                raise KeyError(f"Field '{tok}' not found in plotfile")
+            return ('field', self.fields[tok])
+        elif isinstance(tok, (int, np.integer)):
+            tok = int(tok)
+            if tok >= self.nfields:
+                axis = tok - self.nfields
+                if axis > 2:
+                    raise IndexError((f"The field index [{tok}] is not"
+                                      f" compatible with the number of fields"
+                                      f" in the plotfile ({self.nfields}) and"
+                                      f" the 3 coordinate fields (x, y, z)"))
+                self._check_axis(axis, 'xyz'[axis])
+                return ('coord', axis)
+            return ('field', tok)
+        raise TypeError(f"Unsupported field key type: {type(tok)}")
+
+    def _parse_coord_columns(self, field_arg):
+        """
+        Return the ordered list of column specs (('field', idx) or
+        ('coord', axis)) if :field_arg: references any grid coordinate,
+        otherwise None to keep the original (coordinate free) behavior.
+        Slices are never coordinate-aware so that e.g. PlotfileCooker[:]
+        keeps returning only the data fields.
+        """
+        if isinstance(field_arg, str):
+            tokens = [field_arg]
+        elif isinstance(field_arg, (int, np.integer)):
+            tokens = [int(field_arg)]
+        elif isinstance(field_arg, (list, np.ndarray)):
+            tokens = list(field_arg)
+        else:
+            return None
+
+        def is_coord(tok):
+            if isinstance(tok, str):
+                return tok in COORD_NAMES
+            if isinstance(tok, (int, np.integer)):
+                return int(tok) >= self.nfields
+            return False
+
+        if not any(is_coord(tok) for tok in tokens):
+            return None
+        return [self._token_to_column(tok) for tok in tokens]
 
     def __getitem__(self, key):
         if key > self.limit_level:
             raise ValueError((f"The maximum AMR level of the plotfile"
                               f" is {self.limit_level}"))
+        if self.columns is None:
+            return LevelDataStream(self.cells[key]['files'],
+                                   self.cells[key]['offsets'],
+                                   self.farg,
+                                   serial=self.serial)
         return LevelDataStream(self.cells[key]['files'],
                                self.cells[key]['offsets'],
                                self.farg,
+                               columns=self.columns,
+                               scalar=self.scalar,
+                               grids_lv=self.grids[key],
+                               indexes_lv=self.cells[key]['indexes'],
                                serial=self.serial)
 
     def __call__(self, *args):
@@ -629,6 +862,22 @@ class PlotfileCooker(object):
         # multiple fields using a list of keys
         PlotfileCooker[['temp', 'x_velocity', 'Y(O2)']]
 
+        The grid coordinates are available as the named virtual fields
+        'x', 'y' and 'z'. They can be mixed freely with data fields and
+        the coordinate data is returned as the full tiled 3D array of the
+        box (the cell center coordinate at each point):
+
+        PlotfileCooker['x'] # the x coordinate
+        PlotfileCooker[['temp', 'z']] # temperature and the z coordinate
+
+        When fields are selected by integer index, the coordinates are the
+        three last fields, i.e. for a plotfile with N data fields:
+        'x' is index N, 'y' is index N + 1 and 'z' is index N + 2.
+
+        Note: the grids are stored in float64, so mixing a coordinate with
+        data fields from a float32 plotfile returns a float64 array (the
+        data column is upcast to preserve the coordinate precision).
+
         The second layer defines which AMR Level is selected. This indexing
         operator returns an iterator for the data at the selected level.
         Only integers indices are supported:
@@ -703,7 +952,7 @@ class PlotfileCooker(object):
             box_data = PlotfileCooker["field"][lv][i]
         ```
         """
-        return LevelDataSelector(self.fields, self.cells, key, self.limit_level, self.boxes, self.dx, serial=self.serial)
+        return LevelDataSelector(self.fields, self.cells, key, self.limit_level, self.boxes, self.dx, grids=self.grids, serial=self.serial)
 
     """
     Method for constructing the class from plotfile mesh data
