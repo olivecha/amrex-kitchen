@@ -1119,7 +1119,7 @@ class PlotfileCooker(object):
         """
         iterate over the whole plotfile masking lower
         level data covered by upper level data
-        key should be compatible with PlotfileCooker[lv][*key*]
+        key should be compatible with PlotfileCooker[*key*][lv]
         """
         # Compute the masking data for lower levels
         # This should not be too big as its only for lv < max_level
