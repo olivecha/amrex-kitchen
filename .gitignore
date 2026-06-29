@@ -6,6 +6,7 @@ mandoline/__pycache__
 .ipynb_checkpoints
 test/__pycache__
 archive
+.claude
 .DS_Store
 *example*
 Backtrace.*
