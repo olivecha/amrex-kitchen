@@ -161,17 +161,17 @@ def rewrite_level_header(pck1: PlotfileCooker,
     cell_header_w = os.path.join(os.getcwd(),
                                  pltout, 
                                  pck1.cell_paths[lv],
-                                 "Cell_H")
+                                 f"{pck1.prefix}_H")
     # Header we read
     cell_header_r1 = os.path.join(os.getcwd(),
                                   pck1.pfile,
-                                  pck1.cell_paths[lv], 
-                                  'Cell_H')
+                                  pck1.cell_paths[lv],
+                                  f'{pck1.prefix}_H')
     # Header we read
     cell_header_r2 = os.path.join(os.getcwd(),
                                   pck2.pfile,
-                                  pck2.cell_paths[lv], 
-                                  'Cell_H')
+                                  pck2.cell_paths[lv],
+                                  f'{pck2.prefix}_H')
     with open(cell_header_w, 'w') as ch_w:
         with open(cell_header_r1, 'r') as ch_r1:
             with open(cell_header_r2, 'r') as ch_r2:

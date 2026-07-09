@@ -609,7 +609,7 @@ class Chef(PlotfileCooker):
             self.update_cell_header(lv, 
                                     os.path.join(self.pfile,
                                                  self.cell_paths[lv],
-                                                 "Cell_H"),
+                                                 f"{self.prefix}_H"),
                                     mapped_offsets,
                                     mapped_mins,
                                     mapped_maxs)
@@ -784,16 +784,16 @@ class Chef(PlotfileCooker):
                     for d in range(self.ndims):
                         hfile.write(f"{box[d][0]} {box[d][1]}\n")
                 # Write the Level path info
-                hfile.write(f"Level_{lv}/Cell\n")
+                hfile.write(f"Level_{lv}/{self.prefix}\n")
     
     def update_cell_header(self, lv, cell_header_r, new_offsets,
                            new_mins, new_maxs):
         """
         Update the new Cell header
         """
-        cell_header_w = os.path.join(self.outdir, 
+        cell_header_w = os.path.join(self.outdir,
                                      self.cell_paths[lv],
-                                     "Cell_H")
+                                     f"{self.prefix}_H")
 
         with open(os.path.join(os.getcwd(), cell_header_w), 'w') as ch_w:
             with open(os.path.join(os.getcwd(),cell_header_r), 'r') as ch_r:

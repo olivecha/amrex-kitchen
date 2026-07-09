@@ -837,7 +837,7 @@ class Mandoline(PlotfileCooker):
                 fobj.write(f"{box[self.cx][0]} {box[self.cx][1]}\n")
                 fobj.write(f"{box[self.cy][0]} {box[self.cy][1]}\n")
             # Write the Level path info
-            fobj.write(f"Level_{lv}/Cell\n")
+            fobj.write(f"Level_{lv}/{self.prefix}\n")
 
     def write_cell_data_at_level(self, outfile, lv, lvdata,  indexes):
         """
@@ -867,7 +867,7 @@ class Mandoline(PlotfileCooker):
         chunk_size = len(cell_indexes) // nfiles
 
         # Filenames
-        fnames = [f"Cell_D_{n:05d}" for n in range(nfiles + 1)]
+        fnames = [f"{self.prefix}_D_{n:05d}" for n in range(nfiles + 1)]
         # Store offsets for each file
         offsets = []
         field_max_vals = []
@@ -913,7 +913,7 @@ class Mandoline(PlotfileCooker):
                 offsets.append(curr_offsets)
 
         # Write the cell header
-        with open(os.path.join(outfile, f"Level_{lv}", "Cell_H"), "w") as hfile:
+        with open(os.path.join(outfile, f"Level_{lv}", f"{self.prefix}_H"), "w") as hfile:
             # Always ones
             hfile.write("1\n")
             hfile.write("1\n")

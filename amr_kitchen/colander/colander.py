@@ -136,8 +136,8 @@ class Colander(PlotfileCooker):
             level_files = np.array(self.cells[lv]["files"])
             ncells = len(level_files)
             cell_header_r = os.path.join(self.pfile,
-                                         self.cell_paths[lv], 
-                                         'Cell_H')
+                                         self.cell_paths[lv],
+                                         f'{self.prefix}_H')
             # All indexes of the boxes at lv
             box_indexes = np.arange(ncells)
             # Multiprocessing args list
@@ -187,9 +187,9 @@ class Colander(PlotfileCooker):
         """
         Update the new Cell header
         """
-        cell_header_w = os.path.join(self.outdir, 
+        cell_header_w = os.path.join(self.outdir,
                                      self.cell_paths[lv],
-                                     "Cell_H")
+                                     f"{self.prefix}_H")
 
         with open(os.path.join(os.getcwd(),cell_header_w), 'w') as ch_w, open(os.path.join(os.getcwd(),cell_header_r), 'r') as ch_r:
             # First two lines
@@ -295,6 +295,6 @@ class Colander(PlotfileCooker):
                     for d in range(self.ndims):
                         hfile.write(f"{box[d][0]} {box[d][1]}\n")
                 # Write the Level path info
-                hfile.write(f"Level_{lv}/Cell\n")
+                hfile.write(f"Level_{lv}/{self.prefix}\n")
 
 
