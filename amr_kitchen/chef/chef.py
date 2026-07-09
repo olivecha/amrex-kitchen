@@ -353,11 +353,11 @@ def chefs_knife_user_pfile(args):
                     alldata = newdata
 
                 min_values = np.nanmin(alldata, axis=(0, 1, 2))
-                min_values[min_values == -np.inf] = -1.7976931348623157e+308
-                min_values[np.isnan(min_values)] = -1.7976931348623157e+308
+                min_values[min_values == -np.inf] = -3.4028235e+38
+                min_values[np.isnan(min_values)] = -3.4028235e+38
                 max_values = np.nanmax(alldata, axis=(0, 1, 2))
-                max_values[max_values == np.inf] = 1.7976931348623157e+308
-                max_values[np.isnan(max_values)] = 1.7976931348623157e+308
+                max_values[max_values == np.inf] = 3.4028235e+38
+                max_values[np.isnan(max_values)] = 3.4028235e+38
                 mins.append(min_values)
                 maxs.append(max_values)
                 bfw.write(alldata.astype(dtype, copy=False).flatten(order="F").tobytes())
