@@ -1,5 +1,6 @@
 build
 assets
+chef_multinode*
 mandoline.egg-info
 amr_kitchen.egg-info
 mandoline/__pycache__
