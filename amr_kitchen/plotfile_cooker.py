@@ -1,5 +1,6 @@
 import os
 import shutil
+import warnings
 import traceback
 import multiprocessing
 import numpy as np
@@ -19,6 +20,108 @@ DTYPE='float64'
 # the three "fields" following the data fields, i.e. virtual indices
 # nfields, nfields + 1 and nfields + 2.
 COORD_NAMES = {'x': 0, 'y': 1, 'z': 2}
+
+# Size (in bytes) above which a warning is emitted when a region of the
+# plotfile data is requested with PlotfileCooker[fields][x, y, z]. Reading
+# and expanding that much data takes a while, so the user is told about it
+# instead of facing a silent pause.
+REGION_SIZE_WARNING = 4 * 1024**3
+
+
+def expand_array_nd(arr, factor):
+    """
+    Repeat each cell of :arr: :factor: times along every axis. This is
+    the piecewise constant refinement AMReX uses to represent a coarse
+    cell on a finer grid, so it broadcasts coarse level data to a finer
+    level without altering the values.
+    ___
+    arr: 2D or 3D array of the data in a single AMR box
+    factor: integer refinement factor
+
+    This is the default expansion mode of PlotfileCooker region slices
+    (see PlotfileCooker.set_interp_mode), it is the fastest and the only
+    one which does not create new values.
+    """
+    if arr.ndim == 3:
+        return expand_array3d(arr, factor)
+    for axis in range(arr.ndim):
+        arr = np.repeat(arr, factor, axis=axis)
+    return arr
+
+
+def zoom_array_nd(arr, factor):
+    """
+    Interpolate :arr: onto a :factor: times finer grid using
+    scipy.ndimage.zoom (linear interpolation).
+    ___
+    arr: 2D or 3D array of the data in a single AMR box
+    factor: integer refinement factor
+
+    grid_mode=True is required so that each coarse cell is subdivided
+    into :factor: cells along each axis, matching the cell centered AMR
+    data. With the scipy default (grid_mode=False) the array is stretched
+    between its first and last cell centers instead, which shifts the
+    data off the finer grid and creates seams between the AMR boxes.
+    mode='nearest' avoids pulling zeros in at the box boundaries.
+
+    NaNs are not propagated by the interpolation: they are filled before
+    interpolating and every output cell influenced by a NaN input cell is
+    set back to NaN afterwards (zooming the NaN mask with the same linear
+    interpolation marks exactly the cells a NaN contributed to).
+    """
+    nans = np.isnan(arr)
+    if nans.all():
+        # Nothing to interpolate, and np.nanmean would be undefined
+        return expand_array_nd(arr, factor)
+    if nans.any():
+        filled = np.where(nans, np.nanmean(arr), arr)
+    else:
+        filled = arr
+    out = zoom(filled, factor, order=1, grid_mode=True, mode='nearest')
+    if nans.any():
+        nan_map = zoom(nans.astype('float64'), factor, order=1,
+                       grid_mode=True, mode='nearest')
+        out[nan_map > 0] = np.nan
+    return out
+
+
+# Expansion functions available by name in
+# PlotfileCooker.set_interp_mode
+REGION_INTERP_MODES = {'repeat': expand_array_nd,
+                       'zoom': zoom_array_nd}
+
+
+def region_overlap(lo, hi, start, stop, step):
+    """
+    Intersect an AMR box with the selection of a region slice along a
+    single axis.
+    ___
+    lo, hi: bounds of the box along the axis in the (half open) index
+            space of the region level
+    start, stop, step: the selection along the axis, normalized by
+                       slice.indices with a positive step
+
+    returns: (out_slice, box_slice) such that
+             output[out_slice] = expanded_box_data[box_slice]
+             or None when the box holds no selected cell. Boxes can
+             overlap the region without holding any selected cell when
+             the step is larger than one.
+    """
+    first = max(lo, start)
+    last = min(hi, stop)
+    if first >= last:
+        return None
+    # Offset (in index space) of the first selected cell at or after the
+    # start of the box: the selected cells are start + n * step
+    offset = -(-(first - start) // step) * step
+    begin = start + offset
+    if begin >= last:
+        return None
+    # Number of selected cells in the box
+    count = -(-(last - begin) // step)
+    return (slice(offset // step, offset // step + count),
+            slice(begin - lo, begin - lo + (count - 1) * step + 1, step))
+
 
 def coord_box_data(grids_lv, indices, axis):
     """
@@ -45,6 +148,11 @@ def coord_box_data(grids_lv, indices, axis):
     return np.broadcast_to(loc.reshape(reshaper), shape).copy()
 
 def mp_read_box_single_field(args):
+    """
+    Multiprocessing function reading a single field from a single box
+    A single argument is needed which is passed as a tuple of
+    (filename, box_offset, field_index)
+    """
     with open(args[0], 'rb') as bf:
         bf.seek(args[1])
         header = bf.readline().decode('ascii')
@@ -55,17 +163,28 @@ def mp_read_box_single_field(args):
     return data.reshape(shape[:-1], order='F')
 
 def mp_read_box_slice_field(args):
+    """
+    Multiprocessing function reading a slice of fields from a single box
+    Only data needed to output the slice is read as an optimization
+    The single argument required by map is:
+    (filename, box_offset, slice)
+    """
     with open(args[0], 'rb') as bf:
         bf.seek(args[1])
         header = bf.readline().decode('ascii')
         shape = shape_from_header(header)
         dtype, isize = dtype_from_header(header)
-        start, stop = args[2].indices(shape[-1])[:2]
-        slice_size = stop - start
+        start, stop, step = args[2].indices(shape[-1])
+        slice_size = max(stop - start, 0)
+        # Go to slice start
         bf.seek(np.prod(shape[:-1]) * start * isize, 1)
+        # Read the whole slice
         data = np.fromfile(bf, dtype, np.prod(shape[:-1]) * slice_size)
     data = data.reshape(np.append(shape[:-1], slice_size), order='F')
-    return data[..., args[2]]
+    # Only the step of the field slice is left to apply: the fields before
+    # its start were skipped by the seek and those after its stop were not
+    # read, so indexing with the slice again would offset the fields twice
+    return data[..., ::step]
 
 def mp_read_box_index_field(args):
     # Field indices may be in any order (e.g. [5, 3]), so read the
@@ -109,13 +228,14 @@ def mp_read_bfile_slice_field(args):
                 header = bf.readline().decode('ascii')
                 shape = shape_from_header(header)
                 dtype, isize = dtype_from_header(header)
-                start, stop = args[1].indices(shape[-1])[:2]
-                slice_size = stop - start
+                start, stop, step = args[1].indices(shape[-1])
+                slice_size = max(stop - start, 0)
                 bf.seek(np.prod(shape[:-1]) * start * isize, 1)
                 data = np.fromfile(bf, dtype, np.prod(shape[:-1]) * slice_size)
                 bf.seek(np.prod(shape[:-1]) * (shape[-1] - slice_size - start) * isize, 1)
                 data = data.reshape(np.append(shape[:-1], slice_size), order='F')
-                file_data.append(data[..., args[1]])
+                # Only the step is left to apply, see mp_read_box_slice_field
+                file_data.append(data[..., ::step])
             except Exception as e:
                 print(type(e), e)
                 break
@@ -210,6 +330,11 @@ class LevelDataStream(object):
             self.read_fun = mp_read_box_single_field
             self.file_fun = mp_read_bfile_single_field
         elif isinstance(self.farg, slice):
+            # The fields are read in the order they are stored in the
+            # binary files, so a backward slice cannot be served
+            if (self.farg.step or 1) < 0:
+                raise ValueError(("A field slice with a negative step is not"
+                                  " supported, use a list of field indices"))
             self.read_fun = mp_read_box_slice_field
             self.file_fun = mp_read_bfile_slice_field
         elif (isinstance(self.farg, list) or
@@ -397,7 +522,8 @@ class LevelDataStream(object):
 class LevelDataSelector(object):
 
     def __init__(self, fields, cells, field_arg, limit_level,
-                 boxes = None, dx = None, grids = None, serial=False):
+                 boxes = None, dx = None, grids = None, serial=False,
+                 grid_sizes = None, interp = None):
         self.serial = serial
         self.cells = cells
         self.fields = fields
@@ -405,6 +531,10 @@ class LevelDataSelector(object):
         self.boxes = boxes
         self.dx = dx
         self.grids = grids
+        # Shape of the uniform grid at each level and function used to
+        # expand coarse level data, both only used by region slices
+        self.grid_sizes = grid_sizes
+        self.interp = interp if interp is not None else expand_array_nd
         self.nfields = len(fields)
         # Number of spatial dimensions (used to validate coordinate fields)
         self.ndims = len(dx[0]) if dx is not None else 3
@@ -496,7 +626,303 @@ class LevelDataSelector(object):
             return None
         return [self._token_to_column(tok) for tok in tokens]
 
+    """
+    Methods slicing a region of the data on the finest level grid
+    """
+
+    def _normalize_region_key(self, key, domain):
+        """
+        Validate the indices of a region slice and convert them to one
+        forward (positive step) selection per dimension.
+        ___
+        key: the tuple of indices (or a bare Ellipsis) given to
+             LevelDataSelector.__getitem__
+        domain: shape of the uniform grid at the region level
+
+        returns: (starts, stops, steps, flips, squeeze) where the first
+                 three define the selection along each axis, flips tells
+                 which axes were indexed backwards (they are filled
+                 forward then reversed) and squeeze lists the axes
+                 indexed with an integer (they are dropped like numpy
+                 does)
+        """
+        if key is Ellipsis:
+            key = (Ellipsis,)
+        key = list(key)
+        # Expand a single Ellipsis into the missing full slices
+        n_ellipsis = sum(1 for idx in key if idx is Ellipsis)
+        if n_ellipsis > 1:
+            raise IndexError(("A region slice accepts at most one Ellipsis"
+                              " ('...') index"))
+        if n_ellipsis == 1:
+            pos = key.index(Ellipsis)
+            missing = self.ndims - (len(key) - 1)
+            if missing < 0:
+                raise IndexError((f"A region slice of a {self.ndims}D"
+                                  f" plotfile takes at most {self.ndims}"
+                                  f" indices, got {len(key) - 1} with an"
+                                  f" Ellipsis"))
+            key = key[:pos] + [slice(None)] * missing + key[pos + 1:]
+        if len(key) != self.ndims:
+            raise IndexError((f"A region slice of a {self.ndims}D plotfile"
+                              f" needs {self.ndims} indices, got {len(key)}"))
+        starts, stops, steps, flips, squeeze = [], [], [], [], []
+        for dim, idx in enumerate(key):
+            size = int(domain[dim])
+            if isinstance(idx, slice):
+                start, stop, step = idx.indices(size)
+                flip = False
+                if step < 0:
+                    # Convert the backward selection to the equivalent
+                    # forward one, the axis is reversed once the output
+                    # array is filled
+                    count = len(range(start, stop, step))
+                    if count == 0:
+                        start, stop, step = 0, 0, 1
+                    else:
+                        start, step = start + (count - 1) * step, -step
+                        stop = start + (count - 1) * step + 1
+                        flip = True
+                starts.append(start)
+                stops.append(stop)
+                steps.append(step)
+                flips.append(flip)
+            elif isinstance(idx, (int, np.integer)):
+                cell = int(idx)
+                if cell < 0:
+                    cell += size
+                if cell < 0 or cell >= size:
+                    raise IndexError((f"The index {idx} is out of bounds for"
+                                      f" axis {dim} of the level"
+                                      f" {self.limit_level} grid (size"
+                                      f" {size})"))
+                starts.append(cell)
+                stops.append(cell + 1)
+                steps.append(1)
+                flips.append(False)
+                squeeze.append(dim)
+            else:
+                raise TypeError((f"Unsupported region index for axis {dim}:"
+                                 f" {type(idx).__name__} (only integers,"
+                                 f" slices and a single Ellipsis are"
+                                 f" supported)"))
+        return starts, stops, steps, flips, squeeze
+
+    def _region_columns(self):
+        """
+        Column plan of a region slice: one ('coord', axis) or
+        ('data', index) entry per output column. 'data' indices are the
+        position of the field in the array read for a single AMR box.
+        """
+        if self.columns is not None:
+            plan = []
+            data_index = 0
+            for kind, val in self.columns:
+                if kind == 'field':
+                    plan.append(('data', data_index))
+                    data_index += 1
+                else:
+                    plan.append(('coord', val))
+            return plan
+        if self.scalar:
+            n_columns = 1
+        elif isinstance(self.farg, slice):
+            n_columns = len(range(*self.farg.indices(self.nfields)))
+        else:
+            n_columns = len(self.farg)
+        return [('data', col) for col in range(n_columns)]
+
+    def _region_dtype(self):
+        """
+        Data type of a region slice: the data type of the plotfile boxes,
+        or float64 when grid coordinates are included as the grids are
+        stored in float64 (consistent with the box data indexing)
+        """
+        if self.farg is None:
+            return np.dtype('float64')
+        if self.columns is not None:
+            return np.dtype('float64')
+        # Read the data type from the FAB header of the first box at the
+        # level the region is sliced at
+        files = self.cells[self.limit_level]['files']
+        if len(files) == 0:
+            return np.dtype(DTYPE)
+        with open(files[0], 'rb') as bfile:
+            bfile.seek(self.cells[self.limit_level]['offsets'][0])
+            dtype, _ = dtype_from_header(bfile.readline().decode('ascii'))
+        return np.dtype(dtype)
+
+    def _fill_region_data(self, out, data_columns, starts, stops, steps):
+        """
+        Fill the data columns of the region array :out: with the AMR box
+        data, going from the coarsest to the finest level so that coarse
+        data is overwritten wherever a finer level covers the region.
+        ___
+        out: the region array, with the output columns in the last axis
+        data_columns: (output column, index in the box data) pairs
+        starts, stops, steps: the forward selection along each axis
+        """
+        region_level = self.limit_level
+        # Which boxes to read at each level, from the coarsest to the
+        # finest. This is resolved before reading any data so that no box
+        # is read for nothing.
+        reads = []
+        for lv in range(region_level + 1):
+            # Refinement factor between the level and the region grid
+            factor = 2 ** (region_level - lv)
+            if len(self.cells[lv]['indexes']) == 0:
+                continue
+            indexes = np.array(self.cells[lv]['indexes'])
+            # Bounds of each box in the (half open) index space of the
+            # region grid
+            lows = indexes[:, 0, :] * factor
+            highs = (indexes[:, 1, :] + 1) * factor
+            # Boxes intersecting the bounding box of the region
+            inside = np.ones(len(indexes), dtype=bool)
+            for dim in range(self.ndims):
+                inside &= ((lows[:, dim] < stops[dim]) &
+                           (highs[:, dim] > starts[dim]))
+            # Boxes holding at least one selected cell, with the slices
+            # placing their data in the region array. A box can intersect
+            # the region without holding a selected cell when the step is
+            # larger than one.
+            selection = []
+            for bid in np.flatnonzero(inside):
+                overlaps = []
+                for dim in range(self.ndims):
+                    overlap = region_overlap(lows[bid][dim], highs[bid][dim],
+                                             starts[dim], stops[dim],
+                                             steps[dim])
+                    if overlap is None:
+                        overlaps = None
+                        break
+                    overlaps.append(overlap)
+                if overlaps is not None:
+                    selection.append((int(bid), overlaps))
+            if len(selection) == 0:
+                continue
+            # A stream without the coordinate columns (the coordinates of
+            # a region are computed from the grids), only used to resolve
+            # which box reading function matches the requested fields
+            stream = LevelDataStream(self.cells[lv]['files'],
+                                     self.cells[lv]['offsets'],
+                                     self.farg,
+                                     serial=self.serial)
+            args = [(stream.bfiles[bid], stream.offsets[bid], stream.farg)
+                    for bid, _ in selection]
+            reads.append((factor, selection, stream.read_fun, args))
+        if len(reads) == 0:
+            return
+        # The boxes are read lazily and placed in the region array one at a
+        # time so that the memory usage stays close to the size of the
+        # output array
+        if self.serial:
+            for factor, selection, read_fun, args in reads:
+                self._place_boxes(out, data_columns, selection,
+                                  map(read_fun, args), factor)
+        else:
+            with multiprocessing.Pool() as pool:
+                for factor, selection, read_fun, args in reads:
+                    self._place_boxes(out, data_columns, selection,
+                                      pool.imap(read_fun, args), factor)
+
+    def _place_boxes(self, out, data_columns, selection, box_data, factor):
+        """
+        Expand the data of every box in :selection: by :factor: and place
+        it in the region array :out:
+        ___
+        out: the region array, with the output columns in the last axis
+        data_columns: (output column, index in the box data) pairs
+        selection: (box index, overlaps) pairs, where overlaps holds the
+                   (out_slice, box_slice) of the box along each axis
+        box_data: iterator over the data of the boxes in :selection:
+        factor: refinement factor between the level and the region grid
+        """
+        for (_, overlaps), data in zip(selection, box_data):
+            # The single field reading functions return an array without
+            # the trailing field axis
+            if data.ndim == self.ndims:
+                data = data[..., None]
+            box_shape = data.shape[:self.ndims]
+            expected = tuple(size * factor for size in box_shape)
+            out_slices = tuple(overlap[0] for overlap in overlaps)
+            box_slices = tuple(overlap[1] for overlap in overlaps)
+            for column, index in data_columns:
+                field_data = data[..., index]
+                if factor > 1:
+                    field_data = self.interp(field_data, factor)
+                    if field_data.shape != expected:
+                        name = getattr(self.interp, '__name__', self.interp)
+                        raise ValueError((f"The expansion function {name}"
+                                          f" returned an array of shape"
+                                          f" {field_data.shape} for a box of"
+                                          f" shape {box_shape} expanded by a"
+                                          f" factor {factor}, expected"
+                                          f" {expected}"))
+                out[out_slices + (column,)] = field_data[box_slices]
+
+    def _getitem_region(self, key):
+        """
+        Read a region of the plotfile data as a single array on the
+        uniform grid at the finest level (see PlotfileCooker.__getitem__)
+        """
+        if self.grid_sizes is None:
+            raise ValueError(("Region slices need the shape of the grid at"
+                              " each level (PlotfileCooker.grid_sizes)"))
+        region_level = self.limit_level
+        domain = self.grid_sizes[region_level]
+        starts, stops, steps, flips, squeeze = self._normalize_region_key(key,
+                                                                         domain)
+        plan = self._region_columns()
+        dtype = self._region_dtype()
+        shape = tuple(len(range(starts[dim], stops[dim], steps[dim]))
+                      for dim in range(self.ndims))
+        # Tell the user when a lot of data is requested as reading and
+        # expanding it takes a while
+        nbytes = int(np.prod(shape)) * len(plan) * dtype.itemsize
+        if nbytes > REGION_SIZE_WARNING:
+            warnings.warn((f"Reading the region {shape} of"
+                           f" {len(plan)} field(s) at level {region_level}"
+                           f" requires {nbytes / 1024**3:.1f} GB of memory,"
+                           f" this will take a while"), stacklevel=3)
+        # Cells which are not covered by any AMR box keep the NaN value
+        out = np.full(shape + (len(plan),), np.nan, dtype=dtype)
+        # The grid coordinates are read directly from the level grids
+        for column, (kind, val) in enumerate(plan):
+            if kind == 'coord':
+                coords = self.grids[region_level][val][starts[val]:
+                                                       stops[val]:steps[val]]
+                shaper = [1] * self.ndims
+                shaper[val] = -1
+                out[..., column] = coords.reshape(shaper)
+        data_columns = [(column, val) for column, (kind, val)
+                        in enumerate(plan) if kind == 'data']
+        if len(data_columns) > 0 and self.farg is not None:
+            self._fill_region_data(out, data_columns, starts, stops, steps)
+        # Reverse the axes which were indexed backwards
+        if any(flips):
+            out = out[tuple(slice(None, None, -1) if flip else slice(None)
+                            for flip in flips) + (slice(None),)]
+        # Drop the axes indexed with an integer, and the field axis when
+        # a single field was requested
+        dropped = tuple(squeeze)
+        if self.scalar:
+            dropped = dropped + (self.ndims,)
+        if len(dropped) > 0:
+            out = np.squeeze(out, axis=dropped)
+        return out
+
     def __getitem__(self, key):
+        # A tuple of indices (or a bare Ellipsis) selects a region of the
+        # data on the uniform grid at the finest level instead of an AMR
+        # level (see PlotfileCooker.__getitem__)
+        if isinstance(key, tuple) or key is Ellipsis:
+            return self._getitem_region(key)
+        if not isinstance(key, (int, np.integer)):
+            raise TypeError((f"The AMR level must be an integer, or a tuple"
+                             f" of {self.ndims} indices to slice a region of"
+                             f" the data on the finest level grid, not a"
+                             f" {type(key).__name__}"))
         if key > self.limit_level:
             raise ValueError((f"The maximum AMR level of the plotfile"
                               f" is {self.limit_level}"))
@@ -712,6 +1138,9 @@ class PlotfileCooker(object):
         # header when reading (see dtype_from_header), so float32 and
         # float64 plotfiles are both supported transparently.
         self.serial = serial
+        # Function expanding coarse level data onto the finest level grid
+        # in region slices (see self.set_interp_mode)
+        self.interp_mode = REGION_INTERP_MODES['repeat']
         self.pfile = plotfile_path
         filepath = os.path.join(self.pfile, 'Header')
         with open(filepath) as hfile:
@@ -941,6 +1370,64 @@ class PlotfileCooker(object):
         Z_mean = np.mean(np.hstack(Z_data))
         ```
 
+        Instead of selecting an AMR level, the second layer can slice a
+        region of the data as a single array on the uniform grid at the
+        finest level, like a numpy array. This is done by giving one
+        index per dimension of the plotfile (so three for a 3D plotfile),
+        and the data of every AMR level is combined into the output:
+
+        ```
+        pck = PlotfileCooker(plotfile)
+        # A 3D array with shape (128, 128, 30)
+        temp = pck["temp"][0:128, 0:128, 10:40]
+        # A 4D array with shape (128, 128, 30, 2)
+        both = pck[["temp", "density"]][0:128, 0:128, 10:40]
+        # The whole domain (both are equivalent)
+        temp = pck["temp"][:, :, :]
+        temp = pck["temp"][...]
+        ```
+
+        The indices are cell indices on the uniform grid at the finest
+        level read from the plotfile (`PlotfileCooker.limit_level`, which
+        is `PlotfileCooker.max_level` unless the class was created with a
+        lower `limit_level`). The shape of that grid is
+        `PlotfileCooker.grid_sizes[PlotfileCooker.limit_level]`.
+
+        Negative indices, steps (including negative steps) and a single
+        Ellipsis are supported, and an axis indexed with an integer is
+        dropped like numpy does:
+
+        ```
+        # A 2D array: a slice of the domain normal to z
+        plane = pck["temp"][:, :, 64]
+        # Every other cell in x, reversed in y
+        coarse = pck["temp"][::2, ::-1, :]
+        ```
+
+        The output has the shape `(nx, ny, nz, nfields)`, and the trailing
+        field axis is dropped when a single field is requested, exactly
+        like the AMR box data. The grid coordinates are available as the
+        'x', 'y' and 'z' virtual fields here as well:
+
+        ```
+        # The temperature and the z coordinate of every cell
+        data = pck[["temp", "z"]][:, :, :]
+        ```
+
+        The array is filled from the coarsest to the finest level, so the
+        data of a level is overwritten wherever a finer level covers the
+        region. Coarse level data is expanded onto the finest level grid
+        by repeating each cell value by default, use
+        `PlotfileCooker.set_interp_mode` to interpolate it instead. Cells
+        which are not covered by any AMR box are NaN. The data type is
+        the data type of the plotfile, or float64 when a coordinate is
+        requested (the grids are stored in float64).
+
+        **Warning:** a region slice reads and expands every AMR box
+        overlapping the region at every level, which takes a while for a
+        large region. A warning is emitted when the output array needs
+        more than 4 GB of memory.
+
         **Warning:** the iterator returned by `PlotfileCooker["field"][lv]`
         loops over the binary files without preserving the AMR box order
         in the plotfile headers as it is about 10x faster. To preserve box
@@ -952,10 +1439,58 @@ class PlotfileCooker(object):
             box_data = PlotfileCooker["field"][lv][i]
         ```
         """
-        return LevelDataSelector(self.fields, self.cells, key, self.limit_level, self.boxes, self.dx, grids=self.grids, serial=self.serial)
+        return LevelDataSelector(self.fields, self.cells, key,
+                                 self.limit_level, self.boxes, self.dx,
+                                 grids=self.grids, serial=self.serial,
+                                 grid_sizes=self.grid_sizes,
+                                 interp=self.interp_mode)
+
+    def set_interp_mode(self, mode):
+        """
+        Define how coarse AMR level data is expanded onto the finest
+        level grid when a region of the data is sliced with
+        PlotfileCooker[fields][x, y, z]
+        ___
+        mode: either the name of one of the available modes:
+
+              'repeat': (default) repeat each coarse cell value over the
+                        cells it covers on the finer grid (see
+                        amr_kitchen.utils.expand_array3d). This is the
+                        fastest mode and the only one which does not
+                        create values which are not in the plotfile.
+
+              'zoom': linearly interpolate the coarse data onto the finer
+                      grid using scipy.ndimage.zoom. NaNs are not
+                      propagated by the interpolation: every cell
+                      influenced by a NaN is set back to NaN.
+
+              or a function with the signature fun(array, factor)
+              returning :array:, a 2D or 3D array of the data in a
+              single AMR box, expanded by the integer refinement
+              :factor: along every axis (so an array of shape
+              factor * array.shape). It is called once per field and per
+              AMR box below the finest level.
+
+        Example:
+        ```
+        pck = PlotfileCooker(plotfile)
+        pck.set_interp_mode('zoom')
+        # Coarse level data is now interpolated in region slices
+        data = pck['temp'][:, :, 64]
+        ```
+        """
+        if callable(mode):
+            self.interp_mode = mode
+        elif mode in REGION_INTERP_MODES:
+            self.interp_mode = REGION_INTERP_MODES[mode]
+        else:
+            raise ValueError((f"Unknown interpolation mode '{mode}', use one"
+                              f" of {sorted(REGION_INTERP_MODES)} or a"
+                              f" function fun(array, factor) expanding the"
+                              f" data of a single AMR box"))
 
     """
-    Method for constructing the class from plotfile mesh data
+    Methods for constructing the class from plotfile mesh data
     """
 
     def read_boxes(self, hfile):
